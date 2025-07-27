@@ -7,57 +7,61 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Deploy to CT 109
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ secrets.PROXMOX_HOST }}
-        username: ${{ secrets.PROXMOX_USER }}
-        key: ${{ secrets.PROXMOX_SSH_KEY }}
-        port: ${{ secrets.PROXMOX_PORT }}
-        script: |
-          cd ${{ secrets.DEPLOY_PATH }}
-          
-          echo "Current directory: $(pwd)"
-          echo "Pulling latest code..."
-          git pull origin main
-          
-          echo "Stopping containers..."
-          docker-compose down --timeout 30
-          
-          echo "Cleaning old images..."
-          docker image prune -f
-          
-          echo "Building containers..."
-          docker-compose build --no-cache
-          
-          echo "Starting containers..."
-          docker-compose up -d
-          
-          echo "Waiting for containers to start..."
-          sleep 15
-          
-          echo "Checking container status..."
-          docker ps --format "table {{.Names}}\t{{.Status}}"
-          
-          if [ "$(docker ps -q -f name=openmonitor-bot -f status=running)" ]; then
-            echo "Bot deployment successful!"
-            echo "Recent bot logs:"
-            docker logs openmonitor-bot --tail 5
-          else
-            echo "Bot deployment failed!"
-            echo "All containers:"
-            docker ps -a
-            echo "Bot logs:"
-            docker logs openmonitor-bot --tail 10
-            exit 1
-          fi
-          
-          echo "Final cleanup..."
-          docker system prune -f
-          echo "Deployment completed successfully!"
+    - name: Deploy Bot
+      run: |
+        echo "Starting deployment..."
+        echo "User: $(whoami)"
+        echo "Working directory: $(pwd)"
+        echo "Repository: ${{ github.repository }}"
+        echo "Commit: ${{ github.sha }}"
+        
+        # Copy files to deployment directory
+        echo "Copying files to /opt/open.monitor..."
+        sudo mkdir -p /opt/open.monitor
+        sudo cp -r * /opt/open.monitor/ || true
+        sudo chown -R github-runner:github-runner /opt/open.monitor
+        
+        # Change to deployment directory
+        cd /opt/open.monitor
+        
+        echo "Stopping existing containers..."
+        sudo docker-compose down --timeout 30 || true
+        
+        echo "Cleaning up old images..."
+        sudo docker image prune -f
+        
+        echo "Building new containers..."
+        sudo docker-compose build --no-cache
+        
+        echo "Starting containers..."
+        sudo docker-compose up -d
+        
+        echo "Waiting for services to start..."
+        sleep 15
+        
+        # Check if bot container is running
+        if [ "$(sudo docker ps -q -f name=open.monitor)" ]; then
+          echo "Deployment successful!"
+          echo "Container status:"
+          sudo docker ps --filter name=open.monitor
+          echo "Recent logs:"
+          sudo docker logs $(sudo docker ps -q -f name=open.monitor) --tail 10
+        else
+          echo "Deployment failed!"
+          echo "Checking all containers:"
+          sudo docker ps -a
+          echo "Bot logs:"
+          sudo docker logs $(sudo docker ps -aq -f name=open.monitor) --tail 20
+          exit 1
+        fi
+        
+        echo "Cleaning up unused resources..."
+        sudo docker system prune -f
+        
+        echo "Deployment completed successfully!"
