@@ -80,7 +80,7 @@ if (!fs.existsSync(commandsPath)) {
   process.exit(1);
 }
 
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js') || file.endsWith('.ts'));
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 const commands: any[] = [];
 
 console.log('📝 Loading commands...');
@@ -110,7 +110,7 @@ if (!fs.existsSync(eventsPath)) {
   process.exit(1);
 }
 
-const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js') || file.endsWith('.ts'));
+const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
 
 console.log('🎭 Loading events...');
 for (const file of eventFiles) {
