@@ -110,7 +110,7 @@ async function handleAdd(interaction: ChatInputCommandInteraction, client: Custo
   }
   
   try {
-    await interaction.editReply('🔍 Testing server connection...');
+    await interaction.editReply('Testing server connection...');
     
     // Test server connection
     const sampQuery = new SAMPQuery();
@@ -172,6 +172,18 @@ async function handleAdd(interaction: ChatInputCommandInteraction, client: Custo
       }
       
       await client.intervals.set(interaction.guildId!, intervalConfig);
+      
+      // Set IP channel name if configured
+      if (intervalConfig.serverIpChannel) {
+        try {
+          const serverIpChannel = await client.channels.fetch(intervalConfig.serverIpChannel).catch(() => null);
+          if (serverIpChannel && ('setName' in serverIpChannel)) {
+            await (serverIpChannel as any).setName(`Server ${ip}:${port}`);
+          }
+        } catch (error) {
+          console.error('Failed to update IP channel name:', error);
+        }
+      }
     }
     
     // Update guild config cache
@@ -195,29 +207,29 @@ async function handleAdd(interaction: ChatInputCommandInteraction, client: Custo
     const embed = new EmbedBuilder()
       .setColor(testResult ? 0x00ff00 : 0xff6b6b)
       .setTitle(existingIndex !== -1 ? '✅ Server Updated' : '✅ Server Added')
-      .setDescription(`**${serverName}**\n🌐 ${ip}:${port}`)
+      .setDescription(`**${serverName}**\n${ip}:${port}`)
       .setTimestamp();
     
     if (testResult) {
       embed.addFields(
-        { name: '📊 Status', value: '✅ Online', inline: true },
-        { name: '👥 Players', value: `${testResult.players}/${testResult.maxplayers}`, inline: true },
-        { name: '🎮 Gamemode', value: testResult.gamemode || 'Unknown', inline: true }
+        { name: 'Status', value: '✅ Online', inline: true },
+        { name: 'Players', value: `${testResult.players}/${testResult.maxplayers}`, inline: true },
+        { name: 'Gamemode', value: testResult.gamemode || 'Unknown', inline: true }
       );
     } else {
       embed.addFields(
-        { name: '📊 Status', value: '⚠️ Offline or unreachable', inline: true }
+        { name: 'Status', value: '❌ Offline or unreachable', inline: true }
       );
     }
     
     if (setAsActive) {
       embed.addFields(
-        { name: '🎯 Active Server', value: 'This server is now being monitored', inline: false },
-        { name: '💡 Next Steps', value: 'Use `/monitor setup` to configure monitoring channels', inline: false }
+        { name: 'Active Server', value: 'This server is now being monitored', inline: false },
+        { name: 'Next Steps', value: 'Use `/monitor setup` to configure monitoring channels', inline: false }
       );
     } else {
       embed.addFields(
-        { name: '💡 Next Steps', value: 'Use `/server activate` to switch monitoring to this server', inline: false }
+        { name: 'Next Steps', value: 'Use `/server activate` to switch monitoring to this server', inline: false }
       );
     }
     
@@ -238,11 +250,11 @@ async function handleList(interaction: ChatInputCommandInteraction, client: Cust
   if (servers.length === 0) {
     const embed = new EmbedBuilder()
       .setColor(0xff6b6b)
-      .setTitle('📭 No Servers Configured')
+      .setTitle('No Servers Configured')
       .setDescription('No servers have been added to this guild yet.')
       .addFields(
-        { name: '💡 Getting Started', value: 'Use `/server add` to add your first server!' },
-        { name: '📖 Example', value: '`/server add ip:127.0.0.1 port:7777 name:My Server`' }
+        { name: 'Getting Started', value: 'Use `/server add` to add your first server!' },
+        { name: 'Example', value: '`/server add ip:127.0.0.1 port:7777 name:My Server`' }
       )
       .setTimestamp();
       
@@ -252,7 +264,7 @@ async function handleList(interaction: ChatInputCommandInteraction, client: Cust
   
   const embed = new EmbedBuilder()
     .setColor(0x3498db)
-    .setTitle('🌐 Configured Servers')
+    .setTitle('Configured Servers')
     .setDescription(`Found ${servers.length} server${servers.length === 1 ? '' : 's'}`)
     .setTimestamp();
   
@@ -309,6 +321,18 @@ async function handleActivate(interaction: ChatInputCommandInteraction, client: 
   
   await client.intervals.set(interaction.guildId!, intervalConfig);
   
+  // Update IP channel name if configured
+  if (intervalConfig.serverIpChannel) {
+    try {
+      const serverIpChannel = await client.channels.fetch(intervalConfig.serverIpChannel).catch(() => null);
+      if (serverIpChannel && ('setName' in serverIpChannel)) {
+        await (serverIpChannel as any).setName(`Server ${server.ip}:${server.port}`);
+      }
+    } catch (error) {
+      console.error('Failed to update IP channel name:', error);
+    }
+  }
+  
   // Update cache
   let guildConfig = client.guildConfigs.get(interaction.guildId!) || { servers: [] };
   guildConfig.servers = servers;
@@ -317,12 +341,12 @@ async function handleActivate(interaction: ChatInputCommandInteraction, client: 
   
   const embed = new EmbedBuilder()
     .setColor(0x00ff00)
-    .setTitle('🎯 Server Activated')
+    .setTitle('✅ Server Activated')
     .setDescription(`**${server.name}** is now the active server`)
     .addFields(
-      { name: '🌐 Server Address', value: `${server.ip}:${server.port}`, inline: true },
-      { name: '📊 Monitoring', value: intervalConfig.enabled ? 'Enabled' : 'Disabled', inline: true },
-      { name: '💡 Next Steps', value: intervalConfig.enabled ? 'Server monitoring is active!' : 'Use `/monitor setup` to configure monitoring', inline: false }
+      { name: 'Server Address', value: `${server.ip}:${server.port}`, inline: true },
+      { name: 'Monitoring', value: intervalConfig.enabled ? 'Enabled' : 'Disabled', inline: true },
+      { name: 'Next Steps', value: intervalConfig.enabled ? 'Server monitoring is active!' : 'Use `/monitor setup` to configure monitoring', inline: false }
     )
     .setTimestamp();
     
@@ -379,6 +403,18 @@ async function handleRemove(interaction: ChatInputCommandInteraction, client: Cu
         intervalConfig.activeServerId = servers[0].id;
         intervalConfig.statusMessage = null; // Reset status message
         await client.intervals.set(interaction.guildId!, intervalConfig);
+        
+        // Update IP channel if configured
+        if (intervalConfig.serverIpChannel) {
+          try {
+            const serverIpChannel = await client.channels.fetch(intervalConfig.serverIpChannel).catch(() => null);
+            if (serverIpChannel && ('setName' in serverIpChannel)) {
+              await (serverIpChannel as any).setName(`Server ${servers[0].ip}:${servers[0].port}`);
+            }
+          } catch (error) {
+            console.error('Failed to update IP channel name:', error);
+          }
+        }
       } else {
         // No servers left, disable monitoring
         intervalConfig.activeServerId = undefined;
@@ -397,20 +433,20 @@ async function handleRemove(interaction: ChatInputCommandInteraction, client: Cu
     // Create summary embed
     const embed = new EmbedBuilder()
       .setColor(0xff6b6b)
-      .setTitle('🗑️ Server Removed Successfully')
+      .setTitle('✅ Server Removed Successfully')
       .setDescription(`Removed **${server.name}** from monitoring`)
       .addFields(
-        { name: '🌐 Server Address', value: `${server.ip}:${server.port}`, inline: true },
-        { name: '📅 Added Date', value: new Date(server.addedAt).toLocaleDateString(), inline: true },
-        { name: '👤 Added By', value: `<@${server.addedBy}>`, inline: true }
+        { name: 'Server Address', value: `${server.ip}:${server.port}`, inline: true },
+        { name: 'Added Date', value: new Date(server.addedAt).toLocaleDateString(), inline: true },
+        { name: 'Added By', value: `<@${server.addedBy}>`, inline: true }
       )
       .setTimestamp();
     
     // Add data summary if available
     if (chartData) {
       embed.addFields(
-        { name: '📈 Days Tracked', value: `${chartData.days?.length || 0} days`, inline: true },
-        { name: '🔝 Peak Today', value: `${chartData.maxPlayersToday} players`, inline: true }
+        { name: 'Days Tracked', value: `${chartData.days?.length || 0} days`, inline: true },
+        { name: 'Peak Today', value: `${chartData.maxPlayersToday} players`, inline: true }
       );
     }
     
@@ -418,32 +454,32 @@ async function handleRemove(interaction: ChatInputCommandInteraction, client: Cu
       const totalChecks = uptimeData.uptime + uptimeData.downtime;
       const uptimePercentage = totalChecks > 0 ? ((uptimeData.uptime / totalChecks) * 100).toFixed(1) : '0';
       embed.addFields(
-        { name: '⏱️ Uptime Statistics', value: `${uptimePercentage}% (${uptimeData.uptime}/${totalChecks} checks)`, inline: true }
+        { name: 'Uptime Statistics', value: `${uptimePercentage}% (${uptimeData.uptime}/${totalChecks} checks)`, inline: true }
       );
     }
     
     // Add status about remaining servers
     if (servers.length === 0) {
       embed.addFields(
-        { name: '📊 Monitoring Status', value: '❌ Disabled (no servers remaining)', inline: false },
-        { name: '💡 Next Steps', value: 'Use `/server add` to add a new server', inline: false }
+        { name: 'Monitoring Status', value: '❌ Disabled (no servers remaining)', inline: false },
+        { name: 'Next Steps', value: 'Use `/server add` to add a new server', inline: false }
       );
     } else if (isActiveServer) {
       const newActiveServer = servers[0];
       embed.addFields(
-        { name: '📊 Monitoring Status', value: `✅ Switched to **${newActiveServer.name}**`, inline: false },
-        { name: '💡 Active Server', value: `Now monitoring: ${newActiveServer.name} (${newActiveServer.ip}:${newActiveServer.port})`, inline: false }
+        { name: 'Monitoring Status', value: `✅ Switched to **${newActiveServer.name}**`, inline: false },
+        { name: 'Active Server', value: `Now monitoring: ${newActiveServer.name} (${newActiveServer.ip}:${newActiveServer.port})`, inline: false }
       );
     } else {
       embed.addFields(
-        { name: '📊 Monitoring Status', value: '✅ Continues with existing active server', inline: false },
-        { name: '🔢 Remaining Servers', value: `${servers.length} server${servers.length === 1 ? '' : 's'} still configured`, inline: false }
+        { name: 'Monitoring Status', value: '✅ Continues with existing active server', inline: false },
+        { name: 'Remaining Servers', value: `${servers.length} server${servers.length === 1 ? '' : 's'} still configured`, inline: false }
       );
     }
     
     await interaction.editReply({ embeds: [embed] });
     
-    console.log(`🗑️ Deleted server ${server.name} (${server.id}) for guild ${interaction.guild?.name}`);
+    console.log(`Deleted server ${server.name} (${server.id}) for guild ${interaction.guild?.name}`);
     
   } catch (error) {
     console.error('Error deleting server config:', error);
@@ -462,8 +498,8 @@ async function handleStatus(interaction: ChatInputCommandInteraction, client: Cu
       .setTitle('❌ No Servers Configured')
       .setDescription('No servers have been configured for this guild.')
       .addFields(
-        { name: '💡 Getting Started', value: 'Use `/server add` to configure a SA:MP/open.mp server to monitor.' },
-        { name: '📖 Example', value: '`/server add ip:127.0.0.1 port:7777 name:"My Server"`' }
+        { name: 'Getting Started', value: 'Use `/server add` to configure a SA:MP/open.mp server to monitor.' },
+        { name: 'Example', value: '`/server add ip:127.0.0.1 port:7777 name:"My Server"`' }
       )
       .setTimestamp();
       
