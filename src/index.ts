@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Collection, REST, Routes } from 'discord.js';
+import { Client, Collection } from 'discord.js';
 import { config } from 'dotenv';
 import fs from 'fs';
 import path from 'path';
@@ -21,8 +21,8 @@ if (missingEnvVars.length > 0) {
 // Initialize client with required intents
 const client = new Client({
   intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildVoiceStates
+    'Guilds',
+    'GuildVoiceStates'
   ]
 }) as CustomClient;
 
@@ -71,6 +71,35 @@ try {
   process.exit(1);
 }
 
+// Smart file loading function for both development and production
+function getScriptFiles(directoryPath: string): string[] {
+  if (!fs.existsSync(directoryPath)) {
+    return [];
+  }
+  
+  const files = fs.readdirSync(directoryPath);
+  
+  // Check if we're in development (TypeScript files exist) or production (JavaScript files exist)
+  const hasTypeScript = files.some(file => file.endsWith('.ts') && !file.endsWith('.d.ts'));
+  const hasJavaScript = files.some(file => file.endsWith('.js'));
+  
+  if (hasTypeScript && !hasJavaScript) {
+    // Development mode - load TypeScript files
+    console.log('🔧 Development mode detected - loading .ts files');
+    return files.filter(file => file.endsWith('.ts') && !file.endsWith('.d.ts'));
+  } else if (hasJavaScript) {
+    // Production mode - load JavaScript files
+    console.log('🚀 Production mode detected - loading .js files');
+    return files.filter(file => file.endsWith('.js'));
+  } else {
+    // Fallback - try both
+    return files.filter(file => 
+      (file.endsWith('.js')) || 
+      (file.endsWith('.ts') && !file.endsWith('.d.ts'))
+    );
+  }
+}
+
 // Load commands
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'commands');
@@ -80,7 +109,7 @@ if (!fs.existsSync(commandsPath)) {
   process.exit(1);
 }
 
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+const commandFiles = getScriptFiles(commandsPath);
 const commands: any[] = [];
 
 console.log('📝 Loading commands...');
@@ -110,7 +139,7 @@ if (!fs.existsSync(eventsPath)) {
   process.exit(1);
 }
 
-const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
+const eventFiles = getScriptFiles(eventsPath);
 
 console.log('🎭 Loading events...');
 for (const file of eventFiles) {
@@ -134,6 +163,7 @@ for (const file of eventFiles) {
 }
 
 // Deploy slash commands
+import { REST, Routes } from 'discord.js';
 const rest = new REST().setToken(process.env.TOKEN!);
 
 (async () => {
