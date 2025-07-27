@@ -29,7 +29,7 @@ const CHANNEL_UPDATE_INTERVAL = 600000; // 10 minutes
 
 export async function execute(client: CustomClient): Promise<void> {
   console.log(`Logged in as ${client.user!.tag}`);
-  client.user!.setActivity('SA:MP Servers', { type: 3 });
+  client.user!.setActivity('SA:MP/omp Servers', { type: 3 });
 
   // Load all guild configurations into memory
   try {
