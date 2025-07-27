@@ -4,7 +4,10 @@ import { CustomClient } from '../types';
 export const name = Events.InteractionCreate;
 export const once = false;
 
-export async function execute(interaction: Interaction, client: CustomClient): Promise<void> {
+export async function execute(
+  interaction: Interaction,
+  client: CustomClient
+): Promise<void> {
   if (!interaction.isChatInputCommand()) return;
 
   const command = client.commands.get(interaction.commandName);
@@ -17,9 +20,9 @@ export async function execute(interaction: Interaction, client: CustomClient): P
     await command.execute(interaction, client);
   } catch (error) {
     console.error(`Error executing command ${interaction.commandName}:`, error);
-    
+
     const errorMessage = 'There was an error while executing this command!';
-    
+
     try {
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp({ content: errorMessage, ephemeral: true });

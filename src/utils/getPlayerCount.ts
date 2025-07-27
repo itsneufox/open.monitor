@@ -10,24 +10,26 @@ interface PlayerCountResult {
 
 const sampQuery = new SAMPQuery();
 
-export async function getPlayerCount(server: ServerConfig): Promise<PlayerCountResult> {
+export async function getPlayerCount(
+  server: ServerConfig
+): Promise<PlayerCountResult> {
   try {
     const info = await sampQuery.getServerInfo(server);
-    
+
     if (!info) {
       return {
         playerCount: 0,
         maxPlayers: 0,
         name: 'Server Offline',
-        isOnline: false
+        isOnline: false,
       };
     }
-    
+
     return {
       playerCount: info.players,
       maxPlayers: info.maxplayers,
       name: info.hostname,
-      isOnline: true
+      isOnline: true,
     };
   } catch (error) {
     console.error('Error getting player count:', error);
@@ -35,7 +37,7 @@ export async function getPlayerCount(server: ServerConfig): Promise<PlayerCountR
       playerCount: 0,
       maxPlayers: 0,
       name: 'Server Offline',
-      isOnline: false
+      isOnline: false,
     };
   }
 }

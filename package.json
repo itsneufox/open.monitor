@@ -7,6 +7,10 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "format": "prettier --write src/**/*.ts",
+    "format:check": "prettier --check src/**/*.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -15,8 +19,8 @@
     "samp",
     "monitoring"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "itsneufox",
+  "license": "MIT",
   "type": "commonjs",
   "dependencies": {
     "@keyv/mysql": "^2.1.3",
@@ -26,6 +30,12 @@
   },
   "devDependencies": {
     "@types/node": "^22.13.11",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "prettier": "^3.3.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2"
   }

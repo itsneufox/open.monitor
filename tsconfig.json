@@ -16,6 +16,8 @@
     "removeComments": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
     "moduleResolution": "node"
   },
   "include": [

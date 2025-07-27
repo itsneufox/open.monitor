@@ -11,7 +11,7 @@ export interface ServerConfig {
   addedBy: string;         // User ID who added it
 }
 
-// Simple server info for query functions (what our utils expect)
+// Simple server info for query functions
 export interface SimpleServer {
   ip: string;
   port: number;
@@ -48,7 +48,7 @@ export interface UptimeStats {
   downtime: number;
 }
 
-// Custom Discord client with our database connections
+// Custom Discord client with database connections
 export interface CustomClient extends Client {
   commands: Collection<string, any>;
   
