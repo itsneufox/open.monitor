@@ -1,0 +1,50 @@
+version: '3.8'
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: openmonitor-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: openmonitor
+      MYSQL_USER: openmonitor
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backups:/backups
+    ports:
+      - "3306:3306"
+    networks:
+      - openmonitor-network
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  bot:
+    build: .
+    container_name: openmonitor-bot
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      - TOKEN=${TOKEN}
+      - CLIENT_ID=${CLIENT_ID}
+      - DATABASE_URL=mysql://openmonitor:${MYSQL_PASSWORD}@mysql:3306/openmonitor
+      - NODE_ENV=production
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - openmonitor-network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  openmonitor-network:
+    driver: bridge
