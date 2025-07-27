@@ -32,7 +32,10 @@ export async function execute(
     return;
   }
 
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  // Only defer if not already replied
+  if (!interaction.replied && !interaction.deferred) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  }
 
   try {
     // Get all servers for this guild
@@ -346,9 +349,11 @@ export async function execute(
     console.error('Error in force update:', error);
 
     try {
-      await interaction.editReply(
-        '❌ An error occurred while force updating. Check the logs for details.'
-      );
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply(
+          '❌ An error occurred while force updating. Check the logs for details.'
+        );
+      }
     } catch (replyError) {
       console.error('Failed to send error reply:', replyError);
     }

@@ -21,7 +21,10 @@ export const name = Events.ClientReady;
 export const once = true;
 
 // Track channel updates to respect rate limits
-const lastChannelUpdate = new Map<string, { time: number; count: number; online: boolean }>();
+const lastChannelUpdate = new Map<
+  string,
+  { time: number; count: number; online: boolean }
+>();
 const CHANNEL_UPDATE_INTERVAL = 600000; // 10 minutes
 
 export async function execute(client: CustomClient): Promise<void> {
@@ -35,10 +38,8 @@ export async function execute(client: CustomClient): Promise<void> {
       const interval = await client.intervals.get(guild.id);
 
       // Only set interval if it exists, otherwise leave it undefined
-      const guildConfig = interval 
-        ? { servers, interval }
-        : { servers };
-      
+      const guildConfig = interval ? { servers, interval } : { servers };
+
       client.guildConfigs.set(guild.id, guildConfig);
       console.log(
         `Loaded config for guild: ${guild.name} (${guild.id}) - ${servers.length} server(s)`

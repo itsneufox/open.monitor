@@ -58,10 +58,13 @@ export async function checkPermissionOrReply(
       errorMessage += `You need one of the following to use this command:\n• Administrator permission\n• ${role ? role.toString() : 'The configured management role'}`;
     }
 
-    await interaction.reply({
-      content: errorMessage,
-      flags: MessageFlags.Ephemeral,
-    });
+    // Check if interaction is already replied/deferred
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: errorMessage,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
   }
 
   return hasPermission;

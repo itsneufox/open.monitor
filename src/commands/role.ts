@@ -130,7 +130,7 @@ async function handleRemoveRole(
 
   // Remove the managementRoleId property completely
   delete intervalConfig.managementRoleId;
-  
+
   await client.intervals.set(interaction.guildId!, intervalConfig);
 
   // Update cache

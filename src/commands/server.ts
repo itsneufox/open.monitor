@@ -499,7 +499,7 @@ async function handleRemove(
   }
 
   const server = servers[serverIndex];
-  
+
   // Add safety check for server
   if (!server) {
     await interaction.editReply('❌ Unable to locate server for deletion.');
