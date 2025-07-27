@@ -21,7 +21,10 @@ export const name = Events.ClientReady;
 export const once = true;
 
 // Track channel updates to respect rate limits
-const lastChannelUpdate = new Map<string, { time: number; count: number; online: boolean }>();
+const lastChannelUpdate = new Map<
+  string,
+  { time: number; count: number; online: boolean }
+>();
 const CHANNEL_UPDATE_INTERVAL = 600000; // 10 minutes
 
 export async function execute(client: CustomClient): Promise<void> {
@@ -54,7 +57,9 @@ export async function execute(client: CustomClient): Promise<void> {
     }
 
     if (isProduction) {
-      console.log(`Loaded configurations: ${totalGuilds} guilds, ${totalServers} servers`);
+      console.log(
+        `Loaded configurations: ${totalGuilds} guilds, ${totalServers} servers`
+      );
     }
 
     // Initialize max players next check time if not set
@@ -189,10 +194,7 @@ export async function execute(client: CustomClient): Promise<void> {
                   console.log(`Created new status message in ${guild.name}`);
                 }
               } catch (sendError) {
-                console.error(
-                  `Failed to send status message:`,
-                  sendError
-                );
+                console.error(`Failed to send status message:`, sendError);
               }
             }
           }
@@ -285,10 +287,7 @@ export async function execute(client: CustomClient): Promise<void> {
                   );
                 }
               } else {
-                console.error(
-                  `Failed to update player count channel:`,
-                  error
-                );
+                console.error(`Failed to update player count channel:`, error);
               }
             }
           } else {
@@ -411,10 +410,7 @@ export async function execute(client: CustomClient): Promise<void> {
             data.maxPlayersToday = 0;
             await client.maxPlayers.set(activeServerId, data);
           } catch (error) {
-            console.error(
-              `Error resetting daily data:`,
-              error
-            );
+            console.error(`Error resetting daily data:`, error);
           }
         }
         if (!isProduction) {
