@@ -45,19 +45,19 @@ jobs:
         echo "Waiting for services to start..."
         sleep 15
         
-        # Check if bot container is running
-        if [ "$(sudo docker ps -q -f name=open.monitor)" ]; then
+        # Check if bot container is running (using correct container name)
+        if [ "$(sudo docker ps -q -f name=openmonitor-bot -f status=running)" ]; then
           echo "Deployment successful!"
           echo "Container status:"
-          sudo docker ps --filter name=open.monitor
-          echo "Recent logs:"
-          sudo docker logs $(sudo docker ps -q -f name=open.monitor) --tail 10
+          sudo docker ps --filter name=openmonitor
+          echo "Recent bot logs:"
+          sudo docker logs openmonitor-bot --tail 10
         else
           echo "Deployment failed!"
           echo "Checking all containers:"
           sudo docker ps -a
           echo "Bot logs:"
-          sudo docker logs $(sudo docker ps -aq -f name=open.monitor) --tail 20
+          sudo docker logs openmonitor-bot --tail 20 || echo "Could not get bot logs"
           exit 1
         fi
         
