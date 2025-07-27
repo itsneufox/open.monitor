@@ -1,9 +1,9 @@
-name: Deploy to Proxmox
+name: Deploy to CT 109
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # Allow manual triggers
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -13,51 +13,51 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Login to Docker Hub (Optional)
-      if: github.event_name == 'push'
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Deploy to Proxmox server
+    - name: Deploy to CT 109
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.PROXMOX_HOST }}
         username: ${{ secrets.PROXMOX_USER }}
         key: ${{ secrets.PROXMOX_SSH_KEY }}
-        port: ${{ secrets.PROXMOX_PORT || 22 }}
+        port: ${{ secrets.PROXMOX_PORT }}
         script: |
           cd ${{ secrets.DEPLOY_PATH }}
           
-          # Pull latest code
+          echo "Current directory: $(pwd)"
+          echo "Pulling latest code..."
           git pull origin main
           
-          # Stop containers gracefully
+          echo "Stopping containers..."
           docker-compose down --timeout 30
           
-          # Remove old images to free space
+          echo "Cleaning old images..."
           docker image prune -f
           
-          # Build and start containers
+          echo "Building containers..."
           docker-compose build --no-cache
+          
+          echo "Starting containers..."
           docker-compose up -d
           
-          # Wait a moment for containers to start
-          sleep 10
+          echo "Waiting for containers to start..."
+          sleep 15
           
-          # Check if bot container is running
-          if [ "$(docker ps -q -f name=openmonitor-bot)" ]; then
-            echo "✅ Bot deployment successful!"
-            docker logs openmonitor-bot --tail 10
+          echo "Checking container status..."
+          docker ps --format "table {{.Names}}\t{{.Status}}"
+          
+          if [ "$(docker ps -q -f name=openmonitor-bot -f status=running)" ]; then
+            echo "Bot deployment successful!"
+            echo "Recent bot logs:"
+            docker logs openmonitor-bot --tail 5
           else
-            echo "❌ Bot deployment failed!"
-            docker logs openmonitor-bot --tail 20
+            echo "Bot deployment failed!"
+            echo "All containers:"
+            docker ps -a
+            echo "Bot logs:"
+            docker logs openmonitor-bot --tail 10
             exit 1
           fi
           
-          # Clean up unused Docker resources
-          docker system prune -f --volumes
+          echo "Final cleanup..."
+          docker system prune -f
+          echo "Deployment completed successfully!"
