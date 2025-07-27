@@ -35,7 +35,7 @@ services:
       - TOKEN=${TOKEN}
       - CLIENT_ID=${CLIENT_ID}
       - DATABASE_URL=mysql://openmonitor:${MYSQL_PASSWORD}@mysql:3306/openmonitor
-      - NODE_ENV=production
+      - LOG_LEVEL=${LOG_LEVEL}
     volumes:
       - ./logs:/app/logs
     networks:
