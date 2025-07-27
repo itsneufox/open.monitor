@@ -21,18 +21,20 @@ export const name = Events.ClientReady;
 export const once = true;
 
 // Track channel updates to respect rate limits
-const lastChannelUpdate = new Map<
-  string,
-  { time: number; count: number; online: boolean }
->();
+const lastChannelUpdate = new Map<string, { time: number; count: number; online: boolean }>();
 const CHANNEL_UPDATE_INTERVAL = 600000; // 10 minutes
 
 export async function execute(client: CustomClient): Promise<void> {
+  const isProduction = process.env.LOG_LEVEL === 'production';
+
   console.log(`Logged in as ${client.user!.tag}`);
   client.user!.setActivity('SA:MP/omp Servers', { type: 3 });
 
   // Load all guild configurations into memory
   try {
+    let totalServers = 0;
+    let totalGuilds = 0;
+
     for (const guild of client.guilds.cache.values()) {
       const servers = (await client.servers.get(guild.id)) || [];
       const interval = await client.intervals.get(guild.id);
@@ -41,9 +43,18 @@ export async function execute(client: CustomClient): Promise<void> {
       const guildConfig = interval ? { servers, interval } : { servers };
 
       client.guildConfigs.set(guild.id, guildConfig);
-      console.log(
-        `Loaded config for guild: ${guild.name} (${guild.id}) - ${servers.length} server(s)`
-      );
+      totalServers += servers.length;
+      totalGuilds++;
+
+      if (!isProduction) {
+        console.log(
+          `Loaded config for guild: ${guild.name} (${guild.id}) - ${servers.length} server(s)`
+        );
+      }
+    }
+
+    if (isProduction) {
+      console.log(`Loaded configurations: ${totalGuilds} guilds, ${totalServers} servers`);
     }
 
     // Initialize max players next check time if not set
@@ -57,7 +68,9 @@ export async function execute(client: CustomClient): Promise<void> {
       tomorrow.setHours(0, 0, 0, 0);
 
       await client.maxPlayers.set('next', tomorrow.getTime());
-      console.log(`Set next daily check to: ${tomorrow.toISOString()}`);
+      if (!isProduction) {
+        console.log(`Set next daily check to: ${tomorrow.toISOString()}`);
+      }
     }
   } catch (error) {
     console.error('Error loading guild configurations:', error);
@@ -78,9 +91,11 @@ export async function execute(client: CustomClient): Promise<void> {
           s => s.id === interval.activeServerId
         );
         if (!activeServer) {
-          console.warn(
-            `Active server ${interval.activeServerId} not found for guild ${guild.name}`
-          );
+          if (!isProduction) {
+            console.warn(
+              `Active server ${interval.activeServerId} not found for guild ${guild.name}`
+            );
+          }
           continue;
         }
 
@@ -149,12 +164,16 @@ export async function execute(client: CustomClient): Promise<void> {
                   interval.statusMessage
                 );
                 await existingMsg.edit({ embeds: [serverEmbed] });
-                console.log(`Updated status message in ${guild.name}`);
+                if (!isProduction) {
+                  console.log(`Updated status message in ${guild.name}`);
+                }
                 messageUpdated = true;
               } catch (error) {
-                console.log(
-                  `Could not edit message ${interval.statusMessage} in ${guild.name}, creating new one`
-                );
+                if (!isProduction) {
+                  console.log(
+                    `Could not edit message ${interval.statusMessage} in ${guild.name}, creating new one`
+                  );
+                }
               }
             }
 
@@ -166,10 +185,12 @@ export async function execute(client: CustomClient): Promise<void> {
                 });
                 interval.statusMessage = newMsg.id;
                 await client.intervals.set(guild.id, interval);
-                console.log(`Created new status message in ${guild.name}`);
+                if (!isProduction) {
+                  console.log(`Created new status message in ${guild.name}`);
+                }
               } catch (sendError) {
                 console.error(
-                  `Failed to send status message to ${guild.name}:`,
+                  `Failed to send status message:`,
                   sendError
                 );
               }
@@ -236,45 +257,53 @@ export async function execute(client: CustomClient): Promise<void> {
                     online: info.isOnline,
                   });
 
-                  const reason = timeBasedUpdate
-                    ? 'time'
-                    : significantChange
-                      ? 'significant'
-                      : statusChange
-                        ? 'status'
-                        : 'milestone';
-                  console.log(
-                    `Updated player count channel in ${guild.name}: ${newName} (reason: ${reason})`
-                  );
+                  if (!isProduction) {
+                    const reason = timeBasedUpdate
+                      ? 'time'
+                      : significantChange
+                        ? 'significant'
+                        : statusChange
+                          ? 'status'
+                          : 'milestone';
+                    console.log(
+                      `Updated player count channel in ${guild.name}: ${newName} (reason: ${reason})`
+                    );
+                  }
                 }
               }
             } catch (error: any) {
               if (error.message === 'Channel rename timeout') {
-                console.warn(
-                  `Player count channel update timed out (likely rate limited) for ${guild.name}`
-                );
+                if (!isProduction) {
+                  console.warn(
+                    `Player count channel update timed out (likely rate limited) for ${guild.name}`
+                  );
+                }
               } else if (error.code === 429) {
-                console.warn(
-                  `Rate limited on channel updates for ${guild.name}`
-                );
+                if (!isProduction) {
+                  console.warn(
+                    `Rate limited on channel updates for ${guild.name}`
+                  );
+                }
               } else {
                 console.error(
-                  `Failed to update player count channel in ${guild.name}:`,
+                  `Failed to update player count channel:`,
                   error
                 );
               }
             }
           } else {
-            console.log(
-              `Skipping channel update for ${guild.name}: ${info.playerCount} players (last: ${guildUpdateData.count}, time since: ${Math.round(timeSinceUpdate / 1000 / 60)}min)`
-            );
+            if (!isProduction) {
+              console.log(
+                `Skipping channel update for ${guild.name}: ${info.playerCount} players (last: ${guildUpdateData.count}, time since: ${Math.round(timeSinceUpdate / 1000 / 60)}min)`
+              );
+            }
           }
         }
 
         // Update the guild config cache
         client.guildConfigs.set(guild.id, guildConfig);
       } catch (error) {
-        console.error(`Error processing guild ${guild.name}:`, error);
+        console.error(`Error processing guild:`, error);
       }
     }
   }, 180000); // 3 minutes
@@ -285,10 +314,14 @@ export async function execute(client: CustomClient): Promise<void> {
       const nextCheck = (await client.maxPlayers.get('next')) as number;
       if (!nextCheck || Date.now() < nextCheck) return;
 
-      console.log('Starting daily chart generation...');
+      if (!isProduction) {
+        console.log('Starting daily chart generation...');
+      }
 
       // Update next check time to next day
       await client.maxPlayers.set('next', nextCheck + 86400000);
+
+      let chartsGenerated = 0;
 
       // Generate charts for all guilds with active servers
       for (const guild of client.guilds.cache.values()) {
@@ -347,14 +380,21 @@ export async function execute(client: CustomClient): Promise<void> {
               data.msg = msg.id;
               await client.maxPlayers.set(activeServer.id, data);
 
-              console.log(
-                `Chart sent to ${guild.name} for ${activeServer.name}`
-              );
+              chartsGenerated++;
+              if (!isProduction) {
+                console.log(
+                  `Chart sent to ${guild.name} for ${activeServer.name}`
+                );
+              }
             }
           }
         } catch (error) {
-          console.error(`Error generating chart for ${guild.name}:`, error);
+          console.error(`Error generating chart:`, error);
         }
+      }
+
+      if (isProduction && chartsGenerated > 0) {
+        console.log(`Generated ${chartsGenerated} daily charts`);
       }
 
       // Reset today's max player count after 2 minutes
@@ -372,12 +412,14 @@ export async function execute(client: CustomClient): Promise<void> {
             await client.maxPlayers.set(activeServerId, data);
           } catch (error) {
             console.error(
-              `Error resetting daily data for ${guild.name}:`,
+              `Error resetting daily data:`,
               error
             );
           }
         }
-        console.log('Reset daily player counts for new day');
+        if (!isProduction) {
+          console.log('Reset daily player counts for new day');
+        }
       }, 120000);
     } catch (error) {
       console.error('Error in daily chart generation:', error);
