@@ -19,7 +19,7 @@ export const data = new SlashCommandBuilder()
       .addStringOption(option =>
         option
           .setName('ip')
-          .setDescription('Server IP address')
+          .setDescription('Server IP address or domain name')
           .setRequired(true)
       )
       .addIntegerOption(option =>
@@ -126,22 +126,34 @@ async function handleAdd(
   const port = interaction.options.getInteger('port') || 7777;
   const name = interaction.options.getString('name');
 
-  // Validate IP address format
-  const ipRegex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/;
-  if (!ipRegex.test(ip)) {
+  // Validate IP address OR domain name
+  const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  const domainRegex =
+    /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/;
+
+  const isValidIP = ipRegex.test(ip);
+  const isValidDomain =
+    domainRegex.test(ip) &&
+    ip.includes('.') &&
+    !ip.startsWith('.') &&
+    !ip.endsWith('.');
+
+  if (!isValidIP && !isValidDomain) {
     await interaction.editReply(
-      '❌ Invalid IP address format. Please provide a valid IPv4 address.'
+      '❌ Invalid address format. Please provide a valid IPv4 address (e.g., 192.168.1.100) or domain name (e.g., server.example.com).'
     );
     return;
   }
 
-  // Validate IP octets
-  const octets = ip.split('.').map(Number);
-  if (octets.some(octet => octet < 0 || octet > 255)) {
-    await interaction.editReply(
-      '❌ Invalid IP address. Each octet must be between 0 and 255.'
-    );
-    return;
+  // Validate IP octets only if it's an IP address
+  if (isValidIP) {
+    const octets = ip.split('.').map(Number);
+    if (octets.some(octet => octet < 0 || octet > 255)) {
+      await interaction.editReply(
+        '❌ Invalid IP address. Each octet must be between 0 and 255.'
+      );
+      return;
+    }
   }
 
   try {
@@ -300,7 +312,7 @@ async function handleAdd(
   } catch (error) {
     console.error('Error adding server:', error);
     await interaction.editReply(
-      '❌ An error occurred while adding the server. Please check the IP and port and try again.'
+      '❌ An error occurred while adding the server. Please check the address and port and try again.'
     );
   }
 }

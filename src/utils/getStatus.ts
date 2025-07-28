@@ -9,7 +9,6 @@ export async function getStatus(
   color: number
 ): Promise<EmbedBuilder> {
   let statusTitle = 'Server Status';
-
   const embed = new EmbedBuilder().setColor(color).setTimestamp();
 
   try {
@@ -24,88 +23,70 @@ export async function getStatus(
       return embed;
     }
 
-    // Get server rules for version info
+    // Definitive open.mp detection using 'o' opcode
+    const isOpenMP = await sampQuery.isOpenMP(server);
+
+    // Get server rules for additional version info
     const rules = await sampQuery.getServerRules(server);
 
-    // Get version directly from server rules
+    // Set title and version based on definitive detection
     let detectedVersion = 'Unknown';
-    if (rules.version) {
-      detectedVersion = rules.version;
-    } else if (rules.Ver) {
-      detectedVersion = rules.Ver;
-    } else if (rules.v) {
-      detectedVersion = rules.v;
-    }
-
-    // Detect server type based on hostname, gamemode, or version
-    const hostname = info.hostname.toLowerCase();
-    const gamemode = info.gamemode.toLowerCase();
-
-    if (
-      hostname.includes('open.mp') ||
-      hostname.includes('openmp') ||
-      gamemode.includes('open.mp') ||
-      gamemode.includes('openmp') ||
-      detectedVersion.toLowerCase().includes('open.mp') ||
-      info.maxplayers >= 1000
-    ) {
+    if (isOpenMP) {
       statusTitle = 'open.mp Server Status';
-      if (detectedVersion === 'Unknown') {
-        detectedVersion = 'open.mp';
-      }
+      detectedVersion = 'open.mp';
     } else {
       statusTitle = 'SA:MP Server Status';
-      if (detectedVersion === 'Unknown') {
-        detectedVersion = 'SA:MP';
+      detectedVersion = 'SA:MP 0.3.7';
+
+      // Try to get more specific SA:MP version from rules
+      if (rules.version && rules.version !== 'omp') {
+        detectedVersion = rules.version;
+      } else if (rules.Ver && rules.Ver !== 'omp') {
+        detectedVersion = rules.Ver;
+      } else if (rules.v && rules.v !== 'omp') {
+        detectedVersion = rules.v;
       }
     }
 
     embed.setTitle(statusTitle);
 
-    // Get player list for smaller servers
-    let playerList = '';
-    if (info.players <= 100) {
+    // Get open.mp extra info for banners and logos
+    if (isOpenMP) {
       try {
-        const players = await sampQuery.getPlayers(server);
-
-        if (players.length > 0) {
-          const displayPlayers = players.slice(0, 15);
-          playerList = displayPlayers
-            .map(player => `${player.name} (Score: ${player.score})`)
-            .join('\n');
-
-          if (players.length > 15) {
-            playerList += `\n... and ${players.length - 15} more players`;
+        const extraInfo = await sampQuery.getOpenMPExtraInfo(server);
+        if (extraInfo) {
+          // Set banner image (prefer dark banner, fallback to light banner)
+          if (extraInfo.darkBanner) {
+            embed.setImage(extraInfo.darkBanner);
+          } else if (extraInfo.lightBanner) {
+            embed.setImage(extraInfo.lightBanner);
           }
-        } else {
-          playerList = 'No players online';
+
+          // Set logo as thumbnail
+          if (extraInfo.logo) {
+            embed.setThumbnail(extraInfo.logo);
+          }
         }
       } catch (error) {
-        playerList = `${info.players} players online (names unavailable)`;
+        console.log('Could not fetch open.mp extra info:', error);
       }
-    } else {
-      playerList = `${info.players} players online (too many to list)`;
     }
 
-    if (playerList.length > 1020) {
-      playerList = playerList.substring(0, 1020) + '...';
-    }
+    // Clean description with server name and address
+    embed.setDescription(`**${info.hostname}**\n\`${server.ip}:${server.port}\``);
 
-    embed
-      .setDescription(`**${info.hostname}**\n${server.ip}:${server.port}`)
-      .addFields(
-        {
-          name: 'Players',
-          value: `${info.players}/${info.maxplayers}`,
-          inline: true,
-        },
-        { name: 'Gamemode', value: info.gamemode || 'Unknown', inline: true },
-        { name: 'Language', value: info.language || 'Unknown', inline: true },
-        { name: 'Version', value: detectedVersion, inline: true },
-        { name: 'Password', value: info.password ? 'Yes' : 'No', inline: true },
-        { name: 'Status', value: '✅ Online', inline: true },
-        { name: 'Players Online', value: playerList }
-      );
+    embed.addFields(
+      {
+        name: 'Players',
+        value: `${info.players}/${info.maxplayers}`,
+        inline: true,
+      },
+      { name: 'Gamemode', value: info.gamemode || 'Unknown', inline: true },
+      { name: 'Language', value: info.language || 'Unknown', inline: true },
+      { name: 'Version', value: detectedVersion, inline: true },
+      { name: 'Password', value: info.password ? 'Yes' : 'No', inline: true },
+      { name: 'Status', value: '✅ Online', inline: true }
+    );
 
     return embed;
   } catch (error) {

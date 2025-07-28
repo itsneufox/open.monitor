@@ -95,14 +95,13 @@ export async function execute(
 
     await interaction.editReply(`**Force updating ${targetServer.name}...**`);
 
-    // Get fresh server data with timeout
+    // Get fresh server data with timeout and retry logic
     console.log(`Getting player count for ${targetServer.name}...`);
-    const info = (await Promise.race([
-      getPlayerCount(targetServer),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Server query timeout')), 10000)
-      ),
-    ])) as any;
+    const info = await client.rateLimitManager.executeWithRetry(
+      () => getPlayerCount(targetServer),
+      3,
+      2000
+    );
 
     console.log(
       `Server data received: ${info.isOnline ? 'Online' : 'Offline'} - ${info.playerCount}/${info.maxPlayers}`
@@ -118,37 +117,21 @@ export async function execute(
     ) {
       console.log('Updating status channel...');
       try {
-        const statusChannel = (await Promise.race([
-          client.channels.fetch(intervalConfig.statusChannel),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Channel fetch timeout')), 5000)
-          ),
-        ])) as Channel | null;
-
-        if (statusChannel && statusChannel.type === ChannelType.GuildText) {
-          const textChannel = statusChannel as TextChannel;
+        await client.rateLimitManager.executeWithRetry(async () => {
+          const statusChannel = await client.channels.fetch(intervalConfig.statusChannel!) as TextChannel;
           const color = getRoleColor(interaction.guild!);
           const serverEmbed = await getStatus(targetServer, color);
 
           if (intervalConfig.statusMessage) {
             try {
-              const existingMsg = (await Promise.race([
-                textChannel.messages.fetch(intervalConfig.statusMessage),
-                new Promise((_, reject) =>
-                  setTimeout(
-                    () => reject(new Error('Message fetch timeout')),
-                    5000
-                  )
-                ),
-              ])) as any;
-
+              const existingMsg = await statusChannel.messages.fetch(intervalConfig.statusMessage);
               await existingMsg.edit({ embeds: [serverEmbed] });
               updatesSummary += '✅ Status embed updated\n';
               updatesCount++;
               console.log('Status embed updated');
             } catch (error) {
               console.log('Creating new status message...');
-              const newMsg = await textChannel.send({ embeds: [serverEmbed] });
+              const newMsg = await statusChannel.send({ embeds: [serverEmbed] });
               intervalConfig.statusMessage = newMsg.id;
               await client.intervals.set(interaction.guildId!, intervalConfig);
               updatesSummary += '✅ New status message sent\n';
@@ -157,129 +140,105 @@ export async function execute(
             }
           } else {
             console.log('Creating initial status message...');
-            const newMsg = await textChannel.send({ embeds: [serverEmbed] });
+            const newMsg = await statusChannel.send({ embeds: [serverEmbed] });
             intervalConfig.statusMessage = newMsg.id;
             await client.intervals.set(interaction.guildId!, intervalConfig);
             updatesSummary += '✅ Initial status message sent\n';
             updatesCount++;
             console.log('Initial status message sent');
           }
-        }
+        }, 2);
       } catch (error) {
         updatesSummary += '❌ Failed to update status channel\n';
         console.error('Status channel update error:', error);
       }
     }
 
-    // Update player count channel (only if this is the active server)
+    // Update player count channel with high priority (only if this is the active server)
     if (
       intervalConfig.activeServerId === targetServer.id &&
       intervalConfig.playerCountChannel
     ) {
       console.log('Updating player count channel...');
       try {
-        const playerCountChannel = (await Promise.race([
-          client.channels.fetch(intervalConfig.playerCountChannel),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Channel fetch timeout')), 5000)
-          ),
-        ])) as Channel | null;
+        await client.rateLimitManager.queueChannelUpdate(
+          intervalConfig.playerCountChannel,
+          async () => {
+            const playerCountChannel = await client.channels.fetch(intervalConfig.playerCountChannel!) as Channel;
 
-        if (
-          playerCountChannel &&
-          (playerCountChannel.type === ChannelType.GuildVoice ||
-            playerCountChannel.type === ChannelType.GuildText)
-        ) {
-          const channel = playerCountChannel as TextChannel | VoiceChannel;
-          const newName = info.isOnline
-            ? `Players: ${info.playerCount}/${info.maxPlayers}`
-            : 'Server Offline';
+            if (
+              playerCountChannel &&
+              (playerCountChannel.type === ChannelType.GuildVoice ||
+                playerCountChannel.type === ChannelType.GuildText)
+            ) {
+              const channel = playerCountChannel as TextChannel | VoiceChannel;
+              const newName = info.isOnline
+                ? `Players: ${info.playerCount}/${info.maxPlayers}`
+                : 'Server Offline';
 
-          if (channel.name !== newName) {
-            await Promise.race([
-              channel.setName(newName),
-              new Promise((_, reject) =>
-                setTimeout(
-                  () => reject(new Error('Channel rename timeout')),
-                  15000
-                )
-              ),
-            ]);
-            updatesSummary += '✅ Player count channel updated\n';
-            updatesCount++;
-            console.log('Player count channel updated');
-          } else {
-            updatesSummary += 'Player count channel already up to date\n';
-            console.log('Player count channel already up to date');
-          }
-        }
+              if (channel.name !== newName) {
+                await channel.setName(newName);
+                console.log('Player count channel updated');
+              }
+            }
+          },
+          'high', // High priority for force updates
+          true    // Force the update even if recently updated
+        );
+        updatesSummary += '✅ Player count channel update queued\n';
+        updatesCount++;
+        console.log('Player count channel update queued');
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : 'Unknown error';
-        if (errorMessage === 'Channel rename timeout') {
-          updatesSummary +=
-            'Player count channel update timed out (Discord rate limit)\n';
-          console.warn(
-            'Player count channel update timed out - likely rate limited'
-          );
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (errorMessage.includes('timeout') || errorMessage.includes('rate limit')) {
+          updatesSummary += '⏰ Player count channel update queued (may be delayed due to rate limits)\n';
+          console.warn('Player count channel update queued but may be delayed');
         } else {
-          updatesSummary += '❌ Failed to update player count channel\n';
+          updatesSummary += '❌ Failed to queue player count channel update\n';
           console.error('Player count channel update error:', error);
         }
       }
     }
 
-    // Update server IP channel (only if this is the active server)
+    // Update server IP channel with high priority (only if this is the active server)
     if (
       intervalConfig.activeServerId === targetServer.id &&
       intervalConfig.serverIpChannel
     ) {
       console.log('Updating server IP channel...');
       try {
-        const serverIpChannel = (await Promise.race([
-          client.channels.fetch(intervalConfig.serverIpChannel),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Channel fetch timeout')), 5000)
-          ),
-        ])) as Channel | null;
+        await client.rateLimitManager.queueChannelUpdate(
+          intervalConfig.serverIpChannel,
+          async () => {
+            const serverIpChannel = await client.channels.fetch(intervalConfig.serverIpChannel!) as Channel;
 
-        if (
-          serverIpChannel &&
-          (serverIpChannel.type === ChannelType.GuildVoice ||
-            serverIpChannel.type === ChannelType.GuildText)
-        ) {
-          const channel = serverIpChannel as TextChannel | VoiceChannel;
-          const newName = `Server ${targetServer.ip}:${targetServer.port}`;
+            if (
+              serverIpChannel &&
+              (serverIpChannel.type === ChannelType.GuildVoice ||
+                serverIpChannel.type === ChannelType.GuildText)
+            ) {
+              const channel = serverIpChannel as TextChannel | VoiceChannel;
+              const newName = `Server ${targetServer.ip}:${targetServer.port}`;
 
-          if (channel.name !== newName) {
-            await Promise.race([
-              channel.setName(newName),
-              new Promise((_, reject) =>
-                setTimeout(
-                  () => reject(new Error('Channel rename timeout')),
-                  15000
-                )
-              ),
-            ]);
-            updatesSummary += '✅ Server IP channel updated\n';
-            updatesCount++;
-            console.log('Server IP channel updated');
-          } else {
-            updatesSummary += 'Server IP channel already up to date\n';
-            console.log('Server IP channel already up to date');
-          }
-        }
+              if (channel.name !== newName) {
+                await channel.setName(newName);
+                console.log('Server IP channel updated');
+              }
+            }
+          },
+          'high', // High priority for force updates
+          true    // Force the update even if recently updated
+        );
+        updatesSummary += '✅ Server IP channel update queued\n';
+        updatesCount++;
+        console.log('Server IP channel update queued');
       } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : 'Unknown error';
-        if (errorMessage === 'Channel rename timeout') {
-          updatesSummary +=
-            'Server IP channel update timed out (Discord rate limit)\n';
-          console.warn(
-            'Server IP channel update timed out - likely rate limited'
-          );
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (errorMessage.includes('timeout') || errorMessage.includes('rate limit')) {
+          updatesSummary += '⏰ Server IP channel update queued (may be delayed due to rate limits)\n';
+          console.warn('Server IP channel update queued but may be delayed');
         } else {
-          updatesSummary += '❌ Failed to update server IP channel\n';
+          updatesSummary += '❌ Failed to queue server IP channel update\n';
           console.error('Server IP channel update error:', error);
         }
       }
@@ -343,6 +302,22 @@ export async function execute(
       });
     }
 
+    // Add rate limit queue information
+    const queueStats = client.rateLimitManager.getQueueStats();
+    const activeQueues = Object.entries(queueStats).filter(([_, count]) => count > 0);
+
+    if (activeQueues.length > 0) {
+      const queueInfo = activeQueues
+        .map(([channelId, count]) => `<#${channelId}>: ${count} queued`)
+        .join('\n');
+
+      resultEmbed.addFields({
+        name: 'Rate Limit Queue Status',
+        value: queueInfo,
+        inline: false,
+      });
+    }
+
     console.log('Force update completed successfully');
     await interaction.editReply({ embeds: [resultEmbed] });
   } catch (error) {
@@ -350,9 +325,28 @@ export async function execute(
 
     try {
       if (interaction.deferred || interaction.replied) {
-        await interaction.editReply(
-          '❌ An error occurred while force updating. Check the logs for details.'
-        );
+        const errorEmbed = new EmbedBuilder()
+          .setColor(0xff0000)
+          .setTitle('❌ Force Update Failed')
+          .setDescription('An error occurred while force updating the server.')
+          .addFields(
+            {
+              name: 'Error Details',
+              value: error instanceof Error ? error.message : 'Unknown error occurred',
+              inline: false,
+            },
+            {
+              name: 'Troubleshooting',
+              value:
+                '• Check if the bot has proper permissions\n' +
+                '• Verify the server is reachable\n' +
+                '• Try again in a few moments',
+              inline: false,
+            }
+          )
+          .setTimestamp();
+
+        await interaction.editReply({ embeds: [errorEmbed] });
       }
     } catch (replyError) {
       console.error('Failed to send error reply:', replyError);

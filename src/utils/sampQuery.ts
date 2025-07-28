@@ -31,12 +31,21 @@ interface SAMPPing {
   sequence: number[];
 }
 
+interface OpenMPExtraInfo {
+  discord?: string;
+  lightBanner?: string;
+  darkBanner?: string;
+  logo?: string;
+}
+
 interface SAMPFullInfo {
   info: SAMPInfo;
   rules: SAMPRules;
   players: SAMPPlayer[];
   detailedPlayers: SAMPDetailedPlayer[];
   ping: number;
+  isOpenMP?: boolean;
+  extraInfo?: OpenMPExtraInfo | null;
 }
 
 export class SAMPQuery {
@@ -266,6 +275,72 @@ export class SAMPQuery {
     }
   }
 
+  // OPCODE 'o' - open.mp Extra Info
+  private parseOpenMPExtraInfo(data: Buffer): OpenMPExtraInfo | null {
+    try {
+      if (data.length < 11) return null;
+
+      let offset = 11; // Skip header
+      const extraInfo: OpenMPExtraInfo = {};
+
+      // Read discord link length and data
+      if (offset + 4 <= data.length) {
+        const discordLength = data.readUInt32LE(offset);
+        offset += 4;
+        if (discordLength > 0 && offset + discordLength <= data.length) {
+          extraInfo.discord = data
+            .subarray(offset, offset + discordLength)
+            .toString('utf8');
+          offset += discordLength;
+        }
+      }
+
+      // Read light banner URL
+      if (offset + 4 <= data.length) {
+        const lightBannerLength = data.readUInt32LE(offset);
+        offset += 4;
+        if (
+          lightBannerLength > 0 &&
+          offset + lightBannerLength <= data.length
+        ) {
+          extraInfo.lightBanner = data
+            .subarray(offset, offset + lightBannerLength)
+            .toString('utf8');
+          offset += lightBannerLength;
+        }
+      }
+
+      // Read dark banner URL
+      if (offset + 4 <= data.length) {
+        const darkBannerLength = data.readUInt32LE(offset);
+        offset += 4;
+        if (darkBannerLength > 0 && offset + darkBannerLength <= data.length) {
+          extraInfo.darkBanner = data
+            .subarray(offset, offset + darkBannerLength)
+            .toString('utf8');
+          offset += darkBannerLength;
+        }
+      }
+
+      // Read logo URL
+      if (offset + 4 <= data.length) {
+        const logoLength = data.readUInt32LE(offset);
+        offset += 4;
+        if (logoLength > 0 && offset + logoLength <= data.length) {
+          extraInfo.logo = data
+            .subarray(offset, offset + logoLength)
+            .toString('utf8');
+          offset += logoLength;
+        }
+      }
+
+      return extraInfo;
+    } catch (error) {
+      console.error('Error parsing open.mp extra info:', error);
+      return null;
+    }
+  }
+
   private async query(
     server: ServerConfig,
     opcode: string,
@@ -354,6 +429,28 @@ export class SAMPQuery {
     return pingData ? endTime - startTime : -1;
   }
 
+  // Definitive open.mp detection using 'o' opcode
+  public async isOpenMP(server: ServerConfig): Promise<boolean> {
+    try {
+      const data = await this.query(server, 'o');
+      return data !== null && data.length > 11;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  // Get open.mp extra information (discord, banners, etc.)
+  public async getOpenMPExtraInfo(
+    server: ServerConfig
+  ): Promise<OpenMPExtraInfo | null> {
+    try {
+      const data = await this.query(server, 'o');
+      return data ? this.parseOpenMPExtraInfo(data) : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
   public async getFullServerInfo(
     server: ServerConfig
   ): Promise<Partial<SAMPFullInfo>> {
@@ -375,6 +472,20 @@ export class SAMPQuery {
     console.log(
       `Basic info: ${results.info.hostname} (${results.info.players}/${results.info.maxplayers})`
     );
+
+    // Check if it's open.mp
+    results.isOpenMP = await this.isOpenMP(server);
+    console.log(`Server type: ${results.isOpenMP ? 'open.mp' : 'SA:MP'}`);
+
+    // Get open.mp extra info if applicable
+    if (results.isOpenMP) {
+      results.extraInfo = await this.getOpenMPExtraInfo(server);
+      if (results.extraInfo) {
+        console.log(
+          `Extra info retrieved: discord=${!!results.extraInfo.discord}, banners=${!!(results.extraInfo.lightBanner || results.extraInfo.darkBanner)}`
+        );
+      }
+    }
 
     // Get additional data
     try {
@@ -432,6 +543,7 @@ export class SAMPQuery {
       { code: 'c', name: 'Client List' },
       { code: 'd', name: 'Detailed Players' },
       { code: 'p', name: 'Ping' },
+      { code: 'o', name: 'open.mp Extra Info' },
     ];
 
     for (const opcode of opcodes) {
@@ -461,4 +573,5 @@ export type {
   SAMPRules,
   SAMPPing,
   SAMPFullInfo,
+  OpenMPExtraInfo,
 };

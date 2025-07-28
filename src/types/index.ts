@@ -1,5 +1,6 @@
 import { Client, Collection } from 'discord.js';
 import Keyv from 'keyv';
+import { RateLimitManager } from '../utils/rateLimitManager';
 
 // Basic server configuration
 export interface ServerConfig {
@@ -48,6 +49,12 @@ export interface UptimeStats {
   downtime: number;
 }
 
+// Guild configuration cache structure
+export interface GuildConfig {
+  servers: ServerConfig[];
+  interval?: IntervalConfig;
+}
+
 // Custom Discord client with database connections
 export interface CustomClient extends Client {
   commands: Collection<string, any>;
@@ -58,14 +65,11 @@ export interface CustomClient extends Client {
   maxPlayers: Keyv<ChartData>; // Chart data per server (key: "ip:port")
   uptimes: Keyv<UptimeStats>; // Uptime stats per server (key: "ip:port")
 
+  // Rate limit manager
+  rateLimitManager: RateLimitManager;
+
   // In-memory cache for faster access
-  guildConfigs: Collection<
-    string,
-    {
-      servers: ServerConfig[];
-      interval?: IntervalConfig;
-    }
-  >;
+  guildConfigs: Collection<string, GuildConfig>;
 }
 
 // Helper function to convert ServerConfig to SimpleServer
