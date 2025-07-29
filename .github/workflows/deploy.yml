@@ -1,18 +1,34 @@
 name: Deploy to CT 109
-
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
 jobs:
   deploy:
     runs-on: self-hosted
-    
+   
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
+      
+    - name: Create/Update environment file
+      run: |
+        echo "Creating/updating .env file..."
+        cat > .env << EOF
+        TOKEN=${{ secrets.DISCORD_TOKEN }}
+        CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
+        DATABASE_URL=${{ secrets.DATABASE_URL }}
+        OWNER_ID=${{ secrets.OWNER_ID }}
+        NODE_ENV=production
+        LOG_LEVEL=production
+        
+        # MySQL Configuration
+        MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
+        MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+        EOF
+        echo ".env file created/updated successfully"
+        echo "Environment variables set (values hidden for security)"
+        
     - name: Deploy Bot
       run: |
         echo "Starting deployment..."
@@ -20,31 +36,31 @@ jobs:
         echo "Working directory: $(pwd)"
         echo "Repository: ${{ github.repository }}"
         echo "Commit: ${{ github.sha }}"
-        
+       
         # Copy files to deployment directory
         echo "Copying files to /opt/open.monitor..."
         sudo mkdir -p /opt/open.monitor
         sudo cp -r * /opt/open.monitor/ || true
         sudo chown -R github-runner:github-runner /opt/open.monitor
-        
+       
         # Change to deployment directory
         cd /opt/open.monitor
-        
+       
         echo "Stopping existing containers..."
         sudo docker-compose down --timeout 30 || true
-        
+       
         echo "Cleaning up old images..."
         sudo docker image prune -f
-        
+       
         echo "Building new containers..."
         sudo docker-compose build --no-cache
-        
+       
         echo "Starting containers..."
         sudo docker-compose up -d
-        
+       
         echo "Waiting for services to start..."
         sleep 15
-        
+       
         # Check if bot container is running (using correct container name)
         if [ "$(sudo docker ps -q -f name=openmonitor-bot -f status=running)" ]; then
           echo "Deployment successful!"
@@ -60,8 +76,8 @@ jobs:
           sudo docker logs openmonitor-bot --tail 20 || echo "Could not get bot logs"
           exit 1
         fi
-        
+       
         echo "Cleaning up unused resources..."
         sudo docker system prune -f
-        
+       
         echo "Deployment completed successfully!"

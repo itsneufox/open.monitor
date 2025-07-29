@@ -151,17 +151,23 @@ export async function execute(
             return;
         }
 
-        // Get player list
-        let players: Array<{ id: number, name: string, score: number }> = [];
+        // Get player list - as received from server
+        let players: Array<{ name: string, score: number, ping?: number }> = [];
 
         try {
-            players = await sampQuery.getDetailedPlayers(targetServer);
+            // Try detailed query first (includes ping)
+            const detailedPlayers = await sampQuery.getDetailedPlayers(targetServer);
 
-            if (players.length === 0) {
-                // Fallback to basic player list if detailed fails
+            if (detailedPlayers.length > 0) {
+                players = detailedPlayers.map(player => ({
+                    name: player.name,
+                    score: player.score,
+                    ping: player.ping
+                }));
+            } else {
+                // Fall back to basic query
                 const basicPlayers = await sampQuery.getPlayers(targetServer);
-                players = basicPlayers.map((player, index) => ({
-                    id: index,
+                players = basicPlayers.map(player => ({
                     name: player.name,
                     score: player.score
                 }));
@@ -192,22 +198,24 @@ export async function execute(
             return;
         }
 
-        // Sort players by ID
-        const sortedPlayers = players.sort((a, b) => a.id - b.id);
+        const playersAsReceived = players;
 
         // Pagination setup
-        const playersPerPage = 20;
-        const totalPages = Math.ceil(sortedPlayers.length / playersPerPage);
+        const playersPerPage = 25;
+        const totalPages = Math.ceil(playersAsReceived.length / playersPerPage);
         let currentPage = 0;
 
         const generateEmbed = (page: number) => {
             const start = page * playersPerPage;
             const end = start + playersPerPage;
-            const pageData = sortedPlayers.slice(start, end);
+            const pageData = playersAsReceived.slice(start, end);
 
-            // Clean formatting with aligned IDs
+            // Simple player list
             const playerList = pageData
-                .map(player => `\`[${player.id.toString().padStart(2, ' ')}]\` ${player.name} (${player.score})`)
+                .map(player => {
+                    const pingText = player.ping !== undefined ? ` (${player.ping}ms)` : '';
+                    return `• **${player.name}** - ${player.score}${pingText}`;
+                })
                 .join('\n');
 
             return new EmbedBuilder()
@@ -229,7 +237,7 @@ export async function execute(
                     }
                 )
                 .setFooter({
-                    text: `Showing ${start + 1}-${Math.min(end, sortedPlayers.length)} of ${sortedPlayers.length} players • Sorted by ID`,
+                    text: `Showing ${start + 1}-${Math.min(end, playersAsReceived.length)} of ${playersAsReceived.length} players`,
                 })
                 .setTimestamp();
         };
@@ -310,7 +318,6 @@ export async function execute(
             });
 
             collector.on('end', async () => {
-                // Disable all buttons when collector expires
                 const disabledButtons = new ActionRowBuilder<ButtonBuilder>()
                     .addComponents(
                         new ButtonBuilder()
