@@ -368,22 +368,22 @@ export class SAMPQuery {
   private async query(
     server: ServerConfig,
     opcode: string,
-    customPacket?: Buffer
+    customPacket?: Buffer,
+    isMonitoringCycle: boolean = false
   ): Promise<Buffer | null> {
-    // Security check before querying
     if (!SecurityValidator.validateServerIP(server.ip)) {
       console.warn(`Blocked query to invalid IP: ${server.ip}`);
       return null;
     }
 
-    if (!SecurityValidator.canQueryIP(server.ip, 'global')) {
+    if (!SecurityValidator.canQueryIP(server.ip, 'global', isMonitoringCycle)) {
       console.warn(`Rate limit exceeded for IP: ${server.ip}`);
       return null;
     }
 
     return new Promise(resolve => {
       const socket = dgram.createSocket('udp4');
-      const timeoutMs = 5000; // timeout for security
+      const timeoutMs = 5000;
 
       const timeout = setTimeout(() => {
         socket.close();
@@ -394,7 +394,6 @@ export class SAMPQuery {
         clearTimeout(timeout);
         socket.close();
 
-        // Validate response before processing
         if (!SecurityValidator.validateSAMPResponse(data, server, opcode)) {
           console.warn(`Invalid response from ${server.ip}:${server.port}`);
           resolve(null);
@@ -424,8 +423,8 @@ export class SAMPQuery {
     });
   }
 
-  public async getServerInfo(server: ServerConfig): Promise<SAMPInfo | null> {
-    const data = await this.query(server, 'i');
+  public async getServerInfo(server: ServerConfig, isMonitoring: boolean = false): Promise<SAMPInfo | null> {
+    const data = await this.query(server, 'i', undefined, isMonitoring);
     return data ? this.parseInfoResponse(data) : null;
   }
 

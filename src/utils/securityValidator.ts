@@ -1,17 +1,19 @@
+// utils/securityValidator.ts
 import { ServerConfig } from '../types';
 
 class SecurityValidator {
   private static ipQueryLimits = new Map<string, {
-    lastHour: number[],    // Timestamps for rate limiting
-    guilds: Set<string>,   // Track guilds per IP
+    lastHour: number[],
+    guilds: Set<string>,
     lastQuery: number
   }>();
 
   static validateServerIP(ip: string): boolean {
+    // Allow all IPs as requested
     return true;
   }
 
-  static canQueryIP(targetIP: string, guildId: string): boolean {
+  static canQueryIP(targetIP: string, guildId: string, isMonitoringCycle: boolean = false): boolean {
     const data = this.ipQueryLimits.get(targetIP) ?? {
       lastHour: [],
       guilds: new Set(),
@@ -22,10 +24,15 @@ class SecurityValidator {
     data.lastHour = data.lastHour.filter(time => time > now - 3600000);
     data.guilds.add(guildId);
 
-    // Rate limits: 12 queries/hour, 3 guilds, 30s cooldown
-    if (data.lastHour.length >= 12 || data.guilds.size > 3 ||
-        (now - data.lastQuery) < 30000) {
-      console.warn(`🚨 Query blocked for ${targetIP}: queries=${data.lastHour.length}, guilds=${data.guilds.size}, lastQuery=${now - data.lastQuery}ms ago`);
+    // Different limits based on context
+    const maxQueriesPerHour = 60;
+    const maxGuilds = 10;
+    const cooldownMs = isMonitoringCycle ? 1000 : 10000; // 1s for monitoring, 10s for manual
+
+    if (data.lastHour.length >= maxQueriesPerHour || 
+        data.guilds.size > maxGuilds ||
+        (now - data.lastQuery) < cooldownMs) {
+      console.warn(`🚨 Query blocked for ${targetIP}: queries=${data.lastHour.length}/${maxQueriesPerHour}, guilds=${data.guilds.size}/${maxGuilds}, lastQuery=${now - data.lastQuery}ms ago (cooldown: ${cooldownMs}ms, monitoring: ${isMonitoringCycle})`);
       return false;
     }
 
@@ -36,57 +43,30 @@ class SecurityValidator {
   }
 
   static validateSAMPResponse(data: Buffer | undefined, server: ServerConfig, opcode: string): boolean {
-    // Early return if data is missing or too small
     if (!data || data.length < 11) {
-      console.warn(`Invalid packet: ${data ? `size=${data.length} bytes` : 'null/undefined data'}`);
       return false;
     }
 
-    // Verify packet header
     if (data.toString('ascii', 0, 4) !== 'SAMP') {
-      console.warn('Invalid packet header');
       return false;
     }
 
-    // Safely extract IP components (data.length >=11 confirmed above)
-    const ipParts = [
-      data[4] ?? 0,
-      data[5] ?? 0,
-      data[6] ?? 0,
-      data[7] ?? 0
-    ];
-    const responseIP = ipParts.join('.');
+    // Skip IP validation for domain names
+    const isDomain = !/^\d+\.\d+\.\d+\.\d+$/.test(server.ip);
+    if (!isDomain) {
+      const ipParts = [data[4] ?? 0, data[5] ?? 0, data[6] ?? 0, data[7] ?? 0];
+      const responseIP = ipParts.join('.');
+      const portLowByte = data[8] ?? 0;
+      const portHighByte = data[9] ?? 0;
+      const responsePort = portLowByte + (portHighByte << 8);
 
-    // Safely extract port
-    const portLowByte = data[8] ?? 0;
-    const portHighByte = data[9] ?? 0;
-    const responsePort = portLowByte + (portHighByte << 8);
-
-    // Verify response matches query
-    if (responseIP !== server.ip) {
-      console.warn(`IP mismatch: expected ${server.ip}, got ${responseIP}`);
-      return false;
+      if (responseIP !== server.ip || responsePort !== server.port) {
+        return false;
+      }
     }
 
-    if (responsePort !== server.port) {
-      console.warn(`Port mismatch: expected ${server.port}, got ${responsePort}`);
-      return false;
-    }
-
-    // Verify opcode (safe, we checked data.length >=11)
     const responseOpcode = String.fromCharCode(data[10] ?? 0);
-    if (responseOpcode !== opcode) {
-      console.warn(`Opcode mismatch: expected ${opcode}, got ${responseOpcode}`);
-      return false;
-    }
-
-    // Opcode-specific size validation
-    const minSizes: Record<string, number> = {
-      'i': 15, 'p': 15, 'r': 13,
-      'c': 13, 'd': 13, 'o': 15
-    };
-    const requiredSize = minSizes[opcode] ?? 11;
-    return data.length >= requiredSize;
+    return responseOpcode === opcode;
   }
 
   static validateStringField(data: Buffer | undefined, offset: number, maxLength = 256) {
@@ -97,6 +77,12 @@ class SecurityValidator {
       valid: length <= maxLength && offset + 4 + length <= data.length,
       length
     };
+  }
+
+  // Add method to clear rate limits for debugging
+  static clearRateLimits(): void {
+    this.ipQueryLimits.clear();
+    console.log('Rate limits cleared');
   }
 }
 

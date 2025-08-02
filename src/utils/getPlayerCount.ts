@@ -11,10 +11,11 @@ interface PlayerCountResult {
 const sampQuery = new SAMPQuery();
 
 export async function getPlayerCount(
-  server: ServerConfig
+  server: ServerConfig,
+  isMonitoring: boolean = false
 ): Promise<PlayerCountResult> {
   try {
-    const info = await sampQuery.getServerInfo(server);
+    const info = await sampQuery.getServerInfo(server, isMonitoring);
 
     if (!info) {
       return {

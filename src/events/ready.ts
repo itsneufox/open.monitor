@@ -113,7 +113,7 @@ export async function execute(client: CustomClient): Promise<void> {
 
         // Get current server info with retry logic
         const info = await client.rateLimitManager.executeWithRetry(
-          () => getPlayerCount(activeServer),
+          () => getPlayerCount(activeServer, true),
           3
         );
 
