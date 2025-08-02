@@ -10,7 +10,7 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+     
     - name: Create/Update environment file
       run: |
         echo "Creating/updating .env file..."
@@ -21,14 +21,14 @@ jobs:
         OWNER_ID=${{ secrets.OWNER_ID }}
         NODE_ENV=production
         LOG_LEVEL=production
-        
+       
         # MySQL Configuration
         MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
         MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
         EOF
         echo ".env file created/updated successfully"
         echo "Environment variables set (values hidden for security)"
-        
+       
     - name: Deploy Bot
       run: |
         echo "Starting deployment..."
@@ -37,17 +37,21 @@ jobs:
         echo "Repository: ${{ github.repository }}"
         echo "Commit: ${{ github.sha }}"
        
+        echo "Stopping existing containers..."
+        sudo docker-compose -f /opt/open.monitor/docker-compose.yml down --timeout 30 || true
+       
+        # CLEAN THE DEPLOYMENT DIRECTORY FIRST
+        echo "Cleaning deployment directory..."
+        sudo rm -rf /opt/open.monitor/*
+        sudo mkdir -p /opt/open.monitor
+       
         # Copy files to deployment directory
         echo "Copying files to /opt/open.monitor..."
-        sudo mkdir -p /opt/open.monitor
-        sudo cp -r * /opt/open.monitor/ || true
+        sudo cp -r * /opt/open.monitor/
         sudo chown -R github-runner:github-runner /opt/open.monitor
        
         # Change to deployment directory
         cd /opt/open.monitor
-       
-        echo "Stopping existing containers..."
-        sudo docker-compose down --timeout 30 || true
        
         echo "Cleaning up old images..."
         sudo docker image prune -f
