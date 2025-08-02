@@ -33,7 +33,7 @@ class SecurityValidator {
     // Different limits based on context
     const maxQueriesPerHour = 60;
     const maxGuilds = 10;
-    const cooldownMs = isMonitoringCycle ? 500 : 10000; // 500ms for monitoring, 10s for manual
+    const cooldownMs = isMonitoringCycle ? 15 : 10000; // 15ms for monitoring, 10s for manual
 
     // Check global limits
     if (data.lastHour.length >= maxQueriesPerHour || data.guilds.size > maxGuilds) {
