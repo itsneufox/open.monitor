@@ -149,7 +149,7 @@ const rest = new REST().setToken(process.env.TOKEN!);
   }
 })();
 
-// Simple rate limit monitoring (just for awareness)
+// Simple rate limit monitoring
 client.rest.on('rateLimited', (rateLimitInfo) => {
   console.warn('Rate limit hit:', {
     timeToReset: rateLimitInfo.timeToReset,
@@ -169,6 +169,16 @@ client.on('invalidRequestWarning', (data) => {
     console.error('Check for permission errors or malformed requests');
   }
 });
+
+// Cleanup old rate limit entries every hour
+setInterval(() => {
+  try {
+    const { SecurityValidator } = require('./utils/securityValidator');
+    SecurityValidator.cleanupOldEntries();
+  } catch (error) {
+    console.error('Error during rate limit cleanup:', error);
+  }
+}, 3600000); // 1 hour
 
 // Handle process termination gracefully
 process.on('SIGINT', async () => {

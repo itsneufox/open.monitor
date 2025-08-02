@@ -43,7 +43,7 @@ export async function execute(
       const guild = client.guilds.cache.get(guildId);
       const guildName = guild?.name || 'Unknown Guild';
       const memberCount = guild?.memberCount || 0;
-      
+
       guildList.push(
         `**${guildName}** (${memberCount} members)\n` +
         `   └ ID: \`${guildId}\`\n` +
@@ -62,7 +62,7 @@ export async function execute(
     embed.addFields(
       {
         name: '📊 Global Statistics',
-        value: 
+        value:
           `**Total Guilds:** ${totalGuilds}\n` +
           `**Total Servers:** ${totalServers}\n` +
           `**Active Monitoring:** ${activeMonitoring} guilds\n` +
@@ -75,14 +75,14 @@ export async function execute(
     );
 
     if (interaction.guildId) {
-      const activeServer = interval?.activeServerId 
+      const activeServer = interval?.activeServerId
         ? servers.find(s => s.id === interval.activeServerId)
         : null;
 
       embed.addFields(
         {
           name: '🏠 Current Guild Information',
-          value: 
+          value:
             `**Guild:** ${interaction.guild?.name}\n` +
             `**Guild ID:** \`${interaction.guildId}\`\n` +
             `**Members:** ${interaction.guild?.memberCount || 0}\n` +
@@ -100,9 +100,9 @@ export async function execute(
           const isActive = interval?.activeServerId === server.id;
           const addedBy = client.users.cache.get(server.addedBy);
           return `${isActive ? '🟢' : '⚪'} **${server.name}** (\`${server.id}\`)\n` +
-                 `   └ Address: \`${server.ip}:${server.port}\`\n` +
-                 `   └ Added: <t:${Math.floor(server.addedAt / 1000)}:R>\n` +
-                 `   └ By: ${addedBy?.tag || `Unknown (${server.addedBy})`}`;
+            `   └ Address: \`${server.ip}:${server.port}\`\n` +
+            `   └ Added: <t:${Math.floor(server.addedAt / 1000)}:R>\n` +
+            `   └ By: ${addedBy?.tag || `Unknown (${server.addedBy})`}`;
         }).join('\n\n');
 
         if (serverList.length > 1024) {
@@ -141,22 +141,22 @@ export async function execute(
 
       if (interval) {
         const channels = [];
-        
+
         if (interval.statusChannel) {
           const channel = client.channels.cache.get(interval.statusChannel);
           channels.push(`**Status:** ${channel ? `<#${interval.statusChannel}>` : '❌ Missing'} (\`${interval.statusChannel}\`)`);
         }
-        
+
         if (interval.chartChannel) {
           const channel = client.channels.cache.get(interval.chartChannel);
           channels.push(`**Charts:** ${channel ? `<#${interval.chartChannel}>` : '❌ Missing'} (\`${interval.chartChannel}\`)`);
         }
-        
+
         if (interval.playerCountChannel) {
           const channel = client.channels.cache.get(interval.playerCountChannel);
           channels.push(`**Player Count:** ${channel ? `<#${interval.playerCountChannel}>` : '❌ Missing'} (\`${interval.playerCountChannel}\`)`);
         }
-        
+
         if (interval.serverIpChannel) {
           const channel = client.channels.cache.get(interval.serverIpChannel);
           channels.push(`**Server IP:** ${channel ? `<#${interval.serverIpChannel}>` : '❌ Missing'} (\`${interval.serverIpChannel}\`)`);
@@ -184,13 +184,13 @@ export async function execute(
     const queueStats = client.rateLimitManager.getQueueStats();
     if (Object.keys(queueStats).length > 0) {
       const queueInfo = Object.entries(queueStats)
-        .map(([channelId, count]) => {
+        .map(([channelId, stats]) => {
           const channel = client.channels.cache.get(channelId);
           const channelName = channel ? `<#${channelId}>` : `Unknown Channel`;
-          return `${channelName} (\`${channelId}\`): ${count} queued`;
+          return `${channelName} (\`${channelId}\`): ${(stats as any).size} queued`;
         })
         .join('\n');
-      
+
       embed.addFields({
         name: '⏳ Rate Limit Queues',
         value: queueInfo,
@@ -204,13 +204,47 @@ export async function execute(
       });
     }
 
+    // Add rate limit statistics
+    try {
+      const { SecurityValidator } = require('../utils/securityValidator');
+      const rateLimitStats = SecurityValidator.getRateLimitStats();
+      const activeIPs = Object.keys(rateLimitStats).length;
+
+      if (activeIPs > 0) {
+        const summary = Object.entries(rateLimitStats)
+          .slice(0, 5) // Show only first 5 IPs to avoid embed limits
+          .map(([ip, stats]: [string, any]) =>
+            `**${ip}**: ${stats.queriesInLastHour} queries/hour, ${stats.totalGuilds} guilds`
+          )
+          .join('\n');
+
+        embed.addFields({
+          name: `🛡️ Rate Limiting (${activeIPs} active IPs)`,
+          value: summary || 'No active rate limits',
+          inline: false,
+        });
+      } else {
+        embed.addFields({
+          name: '🛡️ Rate Limiting',
+          value: 'No active rate limits',
+          inline: false,
+        });
+      }
+    } catch (error) {
+      embed.addFields({
+        name: '🛡️ Rate Limiting',
+        value: 'Error fetching rate limit stats',
+        inline: false,
+      });
+    }
+
     if (guildList.length > 0) {
       const guildOverview = guildList.join('\n\n');
-      
+
       if (guildOverview.length > 1024) {
         let currentField = '';
         let fieldIndex = 1;
-        
+
         for (const guildInfo of guildList) {
           if (currentField.length + guildInfo.length > 1020) {
             embed.addFields({
@@ -224,7 +258,7 @@ export async function execute(
             currentField += (currentField ? '\n\n' : '') + guildInfo;
           }
         }
-        
+
         if (currentField) {
           embed.addFields({
             name: fieldIndex === 1 ? '🌐 All Guilds Overview' : `🌐 Guilds (continued ${fieldIndex})`,
@@ -244,13 +278,13 @@ export async function execute(
     try {
       let totalChartEntries = 0;
       let totalUptimeEntries = 0;
-      
+
       for (const [guildId, config] of client.guildConfigs.entries()) {
         for (const server of config.servers) {
           try {
             const chartData = await client.maxPlayers.get(server.id);
             const uptimeData = await client.uptimes.get(server.id);
-            
+
             if (chartData?.days) totalChartEntries += chartData.days.length;
             if (uptimeData) totalUptimeEntries++;
           } catch (error) {
@@ -258,10 +292,10 @@ export async function execute(
           }
         }
       }
-      
+
       embed.addFields({
         name: '💾 Database Statistics',
-        value: 
+        value:
           `**Chart Data Points:** ${totalChartEntries}\n` +
           `**Uptime Records:** ${totalUptimeEntries}\n` +
           `**Database URL:** \`${process.env.DATABASE_URL?.split('@')[1] || 'Not configured'}\``,
@@ -278,18 +312,18 @@ export async function execute(
     const footerOptions: { text: string; iconURL?: string } = {
       text: `Owner Debug Panel • Process ID: ${process.pid} • Discord.js v${require('discord.js').version}`
     };
-    
+
     const botAvatarURL = client.user?.displayAvatarURL();
     if (botAvatarURL) {
       footerOptions.iconURL = botAvatarURL;
     }
-    
+
     embed.setFooter(footerOptions);
 
     await interaction.editReply({ embeds: [embed] });
   } catch (error) {
     console.error('Error in debug command:', error);
-    
+
     const errorEmbed = new EmbedBuilder()
       .setColor(0xff0000)
       .setTitle('❌ Debug Command Error')

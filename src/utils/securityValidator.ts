@@ -1,43 +1,57 @@
 // utils/securityValidator.ts
 import { ServerConfig } from '../types';
 
+interface IPQueryData {
+  lastHour: number[];
+  guilds: Map<string, number>; // guildId -> lastQuery timestamp
+  totalQueries: number;
+}
+
 class SecurityValidator {
-  private static ipQueryLimits = new Map<string, {
-    lastHour: number[],
-    guilds: Set<string>,
-    lastQuery: number
-  }>();
+  private static ipQueryLimits = new Map<string, IPQueryData>();
 
   static validateServerIP(ip: string): boolean {
-    // Allow all IPs as requested
+    // Allow all IPs
     return true;
   }
 
   static canQueryIP(targetIP: string, guildId: string, isMonitoringCycle: boolean = false): boolean {
     const data = this.ipQueryLimits.get(targetIP) ?? {
       lastHour: [],
-      guilds: new Set(),
-      lastQuery: 0
+      guilds: new Map(),
+      totalQueries: 0
     };
 
     const now = Date.now();
+    
+    // Clean up old queries from last hour
     data.lastHour = data.lastHour.filter(time => time > now - 3600000);
-    data.guilds.add(guildId);
-
+    
+    // Get the last query time for this specific guild
+    const lastGuildQuery = data.guilds.get(guildId) || 0;
+    
     // Different limits based on context
     const maxQueriesPerHour = 60;
     const maxGuilds = 10;
-    const cooldownMs = isMonitoringCycle ? 1000 : 10000; // 1s for monitoring, 10s for manual
+    const cooldownMs = isMonitoringCycle ? 500 : 10000; // 500ms for monitoring, 10s for manual
 
-    if (data.lastHour.length >= maxQueriesPerHour || 
-        data.guilds.size > maxGuilds ||
-        (now - data.lastQuery) < cooldownMs) {
-      console.warn(`🚨 Query blocked for ${targetIP}: queries=${data.lastHour.length}/${maxQueriesPerHour}, guilds=${data.guilds.size}/${maxGuilds}, lastQuery=${now - data.lastQuery}ms ago (cooldown: ${cooldownMs}ms, monitoring: ${isMonitoringCycle})`);
+    // Check global limits
+    if (data.lastHour.length >= maxQueriesPerHour || data.guilds.size > maxGuilds) {
+      console.warn(`🚨 Global limit reached for ${targetIP}: queries=${data.lastHour.length}/${maxQueriesPerHour}, guilds=${data.guilds.size}/${maxGuilds}`);
       return false;
     }
 
+    // Check per-guild cooldown
+    if ((now - lastGuildQuery) < cooldownMs) {
+      console.warn(`🚨 Guild cooldown active for ${targetIP} (guild: ${guildId}): lastQuery=${now - lastGuildQuery}ms ago (cooldown: ${cooldownMs}ms, monitoring: ${isMonitoringCycle})`);
+      return false;
+    }
+
+    // Update tracking data
     data.lastHour.push(now);
-    data.lastQuery = now;
+    data.guilds.set(guildId, now);
+    data.totalQueries++;
+    
     this.ipQueryLimits.set(targetIP, data);
     return true;
   }
@@ -83,6 +97,45 @@ class SecurityValidator {
   static clearRateLimits(): void {
     this.ipQueryLimits.clear();
     console.log('Rate limits cleared');
+  }
+
+  // Add method to get current rate limit stats
+  static getRateLimitStats(): Record<string, any> {
+    const stats: Record<string, any> = {};
+    for (const [ip, data] of this.ipQueryLimits.entries()) {
+      stats[ip] = {
+        queriesInLastHour: data.lastHour.length,
+        totalGuilds: data.guilds.size,
+        totalQueries: data.totalQueries,
+        guilds: Array.from(data.guilds.entries()).map(([guildId, lastQuery]) => ({
+          guildId,
+          lastQuery: Date.now() - lastQuery + 'ms ago'
+        }))
+      };
+    }
+    return stats;
+  }
+
+  // Cleanup method to remove old guild entries periodically
+  static cleanupOldEntries(): void {
+    const now = Date.now();
+    const oneHourAgo = now - 3600000;
+    
+    for (const [ip, data] of this.ipQueryLimits.entries()) {
+      // Remove guilds that haven't queried in the last hour
+      for (const [guildId, lastQuery] of data.guilds.entries()) {
+        if (lastQuery < oneHourAgo) {
+          data.guilds.delete(guildId);
+        }
+      }
+      
+      // Remove the entire IP entry if no recent activity
+      if (data.lastHour.length === 0 && data.guilds.size === 0) {
+        this.ipQueryLimits.delete(ip);
+      }
+    }
+    
+    console.log(`🧹 Rate limit cleanup completed. Active IPs: ${this.ipQueryLimits.size}`);
   }
 }
 
