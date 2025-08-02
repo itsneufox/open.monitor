@@ -12,10 +12,11 @@ const sampQuery = new SAMPQuery();
 
 export async function getPlayerCount(
   server: ServerConfig,
+  guildId: string = 'unknown',
   isMonitoring: boolean = false
 ): Promise<PlayerCountResult> {
   try {
-    const info = await sampQuery.getServerInfo(server, isMonitoring);
+    const info = await sampQuery.getServerInfo(server, guildId, isMonitoring);
 
     if (!info) {
       return {

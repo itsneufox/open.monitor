@@ -368,6 +368,7 @@ export class SAMPQuery {
   private async query(
     server: ServerConfig,
     opcode: string,
+    guildId: string, // Add guild ID parameter
     customPacket?: Buffer,
     isMonitoringCycle: boolean = false
   ): Promise<Buffer | null> {
@@ -376,7 +377,7 @@ export class SAMPQuery {
       return null;
     }
 
-    if (!SecurityValidator.canQueryIP(server.ip, 'global', isMonitoringCycle)) {
+    if (!SecurityValidator.canQueryIP(server.ip, guildId, isMonitoringCycle)) { // Use actual guild ID
       console.warn(`Rate limit exceeded for IP: ${server.ip}`);
       return null;
     }
@@ -423,29 +424,27 @@ export class SAMPQuery {
     });
   }
 
-  public async getServerInfo(server: ServerConfig, isMonitoring: boolean = false): Promise<SAMPInfo | null> {
-    const data = await this.query(server, 'i', undefined, isMonitoring);
+  public async getServerInfo(server: ServerConfig, guildId: string = 'unknown', isMonitoring: boolean = false): Promise<SAMPInfo | null> {
+    const data = await this.query(server, 'i', guildId, undefined, isMonitoring);
     return data ? this.parseInfoResponse(data) : null;
   }
 
-public async getServerRules(server: ServerConfig, isMonitoring: boolean = false): Promise<SAMPRules> {
-  const data = await this.query(server, 'r', undefined, isMonitoring);
-  return data ? this.parseRulesResponse(data) : {};
-}
+  public async getServerRules(server: ServerConfig, guildId: string = 'unknown', isMonitoring: boolean = false): Promise<SAMPRules> {
+    const data = await this.query(server, 'r', guildId, undefined, isMonitoring);
+    return data ? this.parseRulesResponse(data) : {};
+  }
 
-  public async getPlayers(server: ServerConfig): Promise<SAMPPlayer[]> {
-    const data = await this.query(server, 'c');
+  public async getPlayers(server: ServerConfig, guildId: string = 'unknown'): Promise<SAMPPlayer[]> {
+    const data = await this.query(server, 'c', guildId);
     return data ? this.parsePlayersResponse(data) : [];
   }
 
-  public async getDetailedPlayers(
-    server: ServerConfig
-  ): Promise<SAMPDetailedPlayer[]> {
-    const data = await this.query(server, 'd');
+  public async getDetailedPlayers(server: ServerConfig, guildId: string = 'unknown'): Promise<SAMPDetailedPlayer[]> {
+    const data = await this.query(server, 'd', guildId);
     return data ? this.parseDetailedPlayersResponse(data) : [];
   }
 
-  public async getPing(server: ServerConfig): Promise<number> {
+  public async getPing(server: ServerConfig, guildId: string = 'unknown'): Promise<number> {
     const startTime = Date.now();
     const sentSequence = Array.from({ length: 4 }, () =>
       Math.floor(Math.random() * 256)
@@ -460,7 +459,7 @@ public async getServerRules(server: ServerConfig, isMonitoring: boolean = false)
       }
     }
 
-    const data = await this.query(server, 'p', pingPacket);
+    const data = await this.query(server, 'p', guildId, pingPacket);
 
     if (!data) return -1;
 
@@ -470,36 +469,32 @@ public async getServerRules(server: ServerConfig, isMonitoring: boolean = false)
     return pingData ? endTime - startTime : -1;
   }
 
-  // Definitive open.mp detection using 'o' opcode
-
-public async isOpenMP(server: ServerConfig, isMonitoring: boolean = false): Promise<boolean> {
-  try {
-    const data = await this.query(server, 'o', undefined, isMonitoring);
-    return data !== null && data.length > 11;
-  } catch (error) {
-    return false;
+  public async isOpenMP(server: ServerConfig, guildId: string = 'unknown', isMonitoring: boolean = false): Promise<boolean> {
+    try {
+      const data = await this.query(server, 'o', guildId, undefined, isMonitoring);
+      return data !== null && data.length > 11;
+    } catch (error) {
+      return false;
+    }
   }
-}
 
   // Get open.mp extra information (discord, banners, etc.)
-public async getOpenMPExtraInfo(server: ServerConfig, isMonitoring: boolean = false): Promise<OpenMPExtraInfo | null> {
-  try {
-    const data = await this.query(server, 'o', undefined, isMonitoring);
-    return data ? this.parseOpenMPExtraInfo(data) : null;
-  } catch (error) {
-    return null;
+  public async getOpenMPExtraInfo(server: ServerConfig, guildId: string = 'unknown', isMonitoring: boolean = false): Promise<OpenMPExtraInfo | null> {
+    try {
+      const data = await this.query(server, 'o', guildId, undefined, isMonitoring);
+      return data ? this.parseOpenMPExtraInfo(data) : null;
+    } catch (error) {
+      return null;
+    }
   }
-}
 
-  public async getFullServerInfo(
-    server: ServerConfig
-  ): Promise<Partial<SAMPFullInfo>> {
+  public async getFullServerInfo(server: ServerConfig, guildId: string = 'unknown'): Promise<Partial<SAMPFullInfo>> {
     console.log(`Performing full SA:MP query for ${server.ip}:${server.port}`);
 
     const results: Partial<SAMPFullInfo> = {};
 
     // Get basic info first
-    const info = await this.getServerInfo(server);
+    const info = await this.getServerInfo(server, guildId);
     if (info) {
       results.info = info;
     }
@@ -514,12 +509,12 @@ public async getOpenMPExtraInfo(server: ServerConfig, isMonitoring: boolean = fa
     );
 
     // Check if it's open.mp
-    results.isOpenMP = await this.isOpenMP(server);
+    results.isOpenMP = await this.isOpenMP(server, guildId);
     console.log(`Server type: ${results.isOpenMP ? 'open.mp' : 'SA:MP'}`);
 
     // Get open.mp extra info if applicable
     if (results.isOpenMP) {
-      results.extraInfo = await this.getOpenMPExtraInfo(server);
+      results.extraInfo = await this.getOpenMPExtraInfo(server, guildId);
       if (results.extraInfo) {
         console.log(
           `Extra info retrieved: discord=${!!results.extraInfo.discord}, banners=${!!(results.extraInfo.lightBanner || results.extraInfo.darkBanner)}`
@@ -529,7 +524,7 @@ public async getOpenMPExtraInfo(server: ServerConfig, isMonitoring: boolean = fa
 
     // Get additional data
     try {
-      results.rules = await this.getServerRules(server);
+      results.rules = await this.getServerRules(server, guildId);
       console.log(
         `Rules: ${Object.keys(results.rules).length} rules retrieved`
       );
@@ -539,7 +534,7 @@ public async getOpenMPExtraInfo(server: ServerConfig, isMonitoring: boolean = fa
     }
 
     try {
-      results.ping = await this.getPing(server);
+      results.ping = await this.getPing(server, guildId);
       console.log(`Ping: ${results.ping}ms`);
     } catch (error) {
       console.log(`Ping query failed:`, error);
@@ -549,12 +544,12 @@ public async getOpenMPExtraInfo(server: ServerConfig, isMonitoring: boolean = fa
     // Get player lists for smaller servers
     if (results.info.players > 0 && results.info.players <= 100) {
       try {
-        results.players = await this.getPlayers(server);
+        results.players = await this.getPlayers(server, guildId);
         console.log(
           `Basic players: ${results.players.length} players retrieved`
         );
 
-        results.detailedPlayers = await this.getDetailedPlayers(server);
+        results.detailedPlayers = await this.getDetailedPlayers(server, guildId);
         console.log(
           `Detailed players: ${results.detailedPlayers.length} players with ping info`
         );
@@ -574,7 +569,7 @@ public async getOpenMPExtraInfo(server: ServerConfig, isMonitoring: boolean = fa
     return results;
   }
 
-  public async testAllOpcodes(server: ServerConfig): Promise<void> {
+  public async testAllOpcodes(server: ServerConfig, guildId: string = 'unknown'): Promise<void> {
     console.log(`Testing all SA:MP opcodes for ${server.ip}:${server.port}`);
 
     const opcodes = [
@@ -589,7 +584,7 @@ public async getOpenMPExtraInfo(server: ServerConfig, isMonitoring: boolean = fa
     for (const opcode of opcodes) {
       try {
         const startTime = Date.now();
-        const data = await this.query(server, opcode.code);
+        const data = await this.query(server, opcode.code, guildId);
         const endTime = Date.now();
 
         if (data) {

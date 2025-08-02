@@ -186,7 +186,7 @@ async function performGuildUpdate(client: CustomClient, guildId: string, guildCo
   }
 
   // Get current server info
-  const info = await getPlayerCount(activeServer, true);
+  const info = await getPlayerCount(activeServer, guildId, true);
 
   // Update chart data
   if (info.playerCount > chartData.maxPlayersToday) {
@@ -211,7 +211,8 @@ async function performGuildUpdate(client: CustomClient, guildId: string, guildCo
     
     if (statusChannel && 'send' in statusChannel) {
       const color = getRoleColor(guild);
-      const serverEmbed = await getStatus(activeServer, color, true);
+      // Pass guildId and isMonitoring correctly
+      const serverEmbed = await getStatus(activeServer, color, guildId, true);
 
       // Try to edit existing message first
       if (interval.statusMessage) {

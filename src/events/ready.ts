@@ -111,9 +111,9 @@ export async function execute(client: CustomClient): Promise<void> {
           await client.maxPlayers.set(activeServer.id, chartData);
         }
 
-        // Get current server info with retry logic
+        // Get current server info with retry logic - Pass guildId and isMonitoring correctly
         const info = await client.rateLimitManager.executeWithRetry(
-          () => getPlayerCount(activeServer, true),
+          () => getPlayerCount(activeServer, guild.id, true),
           3
         );
 
@@ -143,7 +143,8 @@ export async function execute(client: CustomClient): Promise<void> {
             
             if (statusChannel) {
               const color = getRoleColor(guild);
-              const serverEmbed = await getStatus(activeServer, color, true);
+              // Pass guildId and isMonitoring correctly
+              const serverEmbed = await getStatus(activeServer, color, guild.id, true);
 
               let messageUpdated = false;
 

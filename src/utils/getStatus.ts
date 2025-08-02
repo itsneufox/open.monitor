@@ -7,14 +7,14 @@ const sampQuery = new SAMPQuery();
 export async function getStatus(
   server: ServerConfig,
   color: number,
+  guildId: string = 'unknown',
   isMonitoring: boolean = false
 ): Promise<EmbedBuilder> {
   let statusTitle = 'Server Status';
   const embed = new EmbedBuilder().setColor(color).setTimestamp();
 
   try {
-    const info = await sampQuery.getServerInfo(server, isMonitoring);
-
+    const info = await sampQuery.getServerInfo(server, guildId, isMonitoring);
     if (!info) {
       embed
         .setTitle(statusTitle)
@@ -25,11 +25,9 @@ export async function getStatus(
     }
 
     // Definitive open.mp detection using 'o' opcode
-    const isOpenMP = await sampQuery.isOpenMP(server, isMonitoring);
-
+    const isOpenMP = await sampQuery.isOpenMP(server, guildId, isMonitoring);
     // Get server rules for additional version info
-    const rules = await sampQuery.getServerRules(server, isMonitoring);
-
+    const rules = await sampQuery.getServerRules(server, guildId, isMonitoring);
     // Set title and version based on definitive detection
     let detectedVersion = 'Unknown';
     if (isOpenMP) {
@@ -54,7 +52,7 @@ export async function getStatus(
     // Get open.mp extra info for banners and logos
     if (isOpenMP) {
       try {
-        const extraInfo = await sampQuery.getOpenMPExtraInfo(server, isMonitoring); // Add monitoring flag
+        const extraInfo = await sampQuery.getOpenMPExtraInfo(server, guildId, isMonitoring);
         if (extraInfo) {
           // Set banner image (prefer dark banner, fallback to light banner)
           if (extraInfo.darkBanner) {
