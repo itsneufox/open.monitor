@@ -428,10 +428,10 @@ export class SAMPQuery {
     return data ? this.parseInfoResponse(data) : null;
   }
 
-  public async getServerRules(server: ServerConfig): Promise<SAMPRules> {
-    const data = await this.query(server, 'r');
-    return data ? this.parseRulesResponse(data) : {};
-  }
+public async getServerRules(server: ServerConfig, isMonitoring: boolean = false): Promise<SAMPRules> {
+  const data = await this.query(server, 'r', undefined, isMonitoring);
+  return data ? this.parseRulesResponse(data) : {};
+}
 
   public async getPlayers(server: ServerConfig): Promise<SAMPPlayer[]> {
     const data = await this.query(server, 'c');
@@ -471,26 +471,25 @@ export class SAMPQuery {
   }
 
   // Definitive open.mp detection using 'o' opcode
-  public async isOpenMP(server: ServerConfig): Promise<boolean> {
-    try {
-      const data = await this.query(server, 'o');
-      return data !== null && data.length > 11;
-    } catch (error) {
-      return false;
-    }
+
+public async isOpenMP(server: ServerConfig, isMonitoring: boolean = false): Promise<boolean> {
+  try {
+    const data = await this.query(server, 'o', undefined, isMonitoring);
+    return data !== null && data.length > 11;
+  } catch (error) {
+    return false;
   }
+}
 
   // Get open.mp extra information (discord, banners, etc.)
-  public async getOpenMPExtraInfo(
-    server: ServerConfig
-  ): Promise<OpenMPExtraInfo | null> {
-    try {
-      const data = await this.query(server, 'o');
-      return data ? this.parseOpenMPExtraInfo(data) : null;
-    } catch (error) {
-      return null;
-    }
+public async getOpenMPExtraInfo(server: ServerConfig, isMonitoring: boolean = false): Promise<OpenMPExtraInfo | null> {
+  try {
+    const data = await this.query(server, 'o', undefined, isMonitoring);
+    return data ? this.parseOpenMPExtraInfo(data) : null;
+  } catch (error) {
+    return null;
   }
+}
 
   public async getFullServerInfo(
     server: ServerConfig

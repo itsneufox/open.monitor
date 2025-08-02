@@ -143,7 +143,7 @@ export async function execute(client: CustomClient): Promise<void> {
             
             if (statusChannel) {
               const color = getRoleColor(guild);
-              const serverEmbed = await getStatus(activeServer, color);
+              const serverEmbed = await getStatus(activeServer, color, true);
 
               let messageUpdated = false;
 

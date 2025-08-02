@@ -211,7 +211,7 @@ async function performGuildUpdate(client: CustomClient, guildId: string, guildCo
     
     if (statusChannel && 'send' in statusChannel) {
       const color = getRoleColor(guild);
-      const serverEmbed = await getStatus(activeServer, color);
+      const serverEmbed = await getStatus(activeServer, color, true);
 
       // Try to edit existing message first
       if (interval.statusMessage) {
