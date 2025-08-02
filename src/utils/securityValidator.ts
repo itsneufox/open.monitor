@@ -1,18 +1,6 @@
 import { ServerConfig } from '../types';
 
 class SecurityValidator {
-  // Block private/special IP ranges (except in development)
-  private static readonly BLOCKED_IP_RANGES = [
-    /^0\./,                                     // 0.x.x.x (invalid)
-    /^10\./,                                    // 10.x.x.x (private)
-    /^172\.(1[6-9]|2[0-9]|3[01])\./,            // 172.16-31.x.x (private)
-    /^192\.168\./,                              // 192.168.x.x (private)
-    /^169\.254\./,                              // 169.254.x.x (link-local)
-    /^224\./,                                   // 224.x.x.x (multicast)
-    /^255\./,                                   // 255.x.x.x (broadcast)
-    /^127\./                                    // 127.x.x.x (loopback)
-  ];
-
   private static ipQueryLimits = new Map<string, {
     lastHour: number[],    // Timestamps for rate limiting
     guilds: Set<string>,   // Track guilds per IP
@@ -20,11 +8,7 @@ class SecurityValidator {
   }>();
 
   static validateServerIP(ip: string): boolean {
-    const isBlocked = this.BLOCKED_IP_RANGES.some(range => range.test(ip));
-    
-    return process.env.NODE_ENV === 'development'
-      ? !isBlocked || /^127\./.test(ip) // Allow localhost in dev
-      : !isBlocked;
+    return true;
   }
 
   static canQueryIP(targetIP: string, guildId: string): boolean {
