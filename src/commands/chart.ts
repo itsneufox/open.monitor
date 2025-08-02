@@ -23,9 +23,8 @@ export async function execute(
   interaction: ChatInputCommandInteraction,
   client: CustomClient
 ): Promise<void> {
-  await interaction.deferReply();
+  await interaction.deferReply({ ephemeral: true });
 
-  // Get server info
   if (!interaction.guildId) {
     await interaction.editReply(
       '❌ This command can only be used in a server.'
@@ -33,7 +32,6 @@ export async function execute(
     return;
   }
 
-  // Get all servers for this guild
   const servers = (await client.servers.get(interaction.guildId)) || [];
   if (servers.length === 0) {
     const embed = new EmbedBuilder()
@@ -42,8 +40,7 @@ export async function execute(
       .setDescription('No servers have been configured for this guild.')
       .addFields({
         name: 'Getting Started',
-        value:
-          'Use `/server add` to configure a SA:MP/open.mp server to monitor.',
+        value: 'Use `/server add` to configure a SA:MP/open.mp server to monitor.',
       })
       .setTimestamp();
 
@@ -51,12 +48,10 @@ export async function execute(
     return;
   }
 
-  // Determine which server to show chart for
   const requestedServer = interaction.options.getString('server');
   let targetServer;
 
   if (requestedServer) {
-    // Find specific server by ID or name
     targetServer = servers.find(
       s => s.id === requestedServer || s.name === requestedServer
     );
@@ -67,11 +62,9 @@ export async function execute(
       return;
     }
   } else {
-    // Use active server
     const intervalConfig = await client.intervals.get(interaction.guildId);
     if (!intervalConfig?.activeServerId) {
       if (servers.length === 1) {
-        // If only one server, use it
         targetServer = servers[0];
       } else {
         await interaction.editReply(
@@ -90,14 +83,12 @@ export async function execute(
     }
   }
 
-  // At this point targetServer should be defined, but let's add a safety check
   if (!targetServer) {
     await interaction.editReply('❌ Unable to determine target server.');
     return;
   }
 
   try {
-    // Get chart data using server ID
     const chartData = (await client.maxPlayers.get(targetServer.id)) as
       | ChartData
       | undefined;
@@ -112,14 +103,12 @@ export async function execute(
         .addFields(
           {
             name: 'Data Collection',
-            value:
-              'The bot collects player data every 3 minutes when monitoring is enabled.',
+            value: 'The bot collects player data every 10 minutes when monitoring is enabled.',
             inline: false,
           },
           {
             name: 'Enable Monitoring',
-            value:
-              'Use `/monitor setup` to start collecting data automatically.',
+            value: 'Use `/monitor setup` to start collecting data automatically.',
             inline: false,
           }
         )
@@ -140,8 +129,7 @@ export async function execute(
         .addFields(
           {
             name: 'Chart Requirements',
-            value:
-              'At least 2 days of data are needed to generate a meaningful chart.',
+            value: 'At least 2 days of data are needed to generate a meaningful chart.',
             inline: false,
           },
           {
@@ -184,13 +172,9 @@ export async function execute(
       }
     }
 
-    // Get role color for chart
     const color = getRoleColor(interaction.guild!);
-
-    // Generate chart
     const chart = await getChart(chartData, color);
 
-    // Create rich embed
     const embed = new EmbedBuilder()
       .setColor(color)
       .setTitle(`Player Activity Analysis`)
@@ -221,20 +205,18 @@ export async function execute(
       .setImage('attachment://player-chart.png')
       .setTimestamp();
 
-    // Set footer with proper iconURL handling
     const guildIconURL = interaction.guild?.iconURL();
     if (guildIconURL) {
       embed.setFooter({
-        text: `Data collected every 3 minutes • Last updated`,
+        text: `Data collected every 10 minutes • Last updated`,
         iconURL: guildIconURL,
       });
     } else {
       embed.setFooter({
-        text: `Data collected every 3 minutes • Last updated`,
+        text: `Data collected every 10 minutes • Last updated`,
       });
     }
 
-    // Add capacity utilization
     const utilizationPercent = (
       (averagePlayers / chartData.maxPlayers) *
       100
@@ -245,7 +227,6 @@ export async function execute(
       inline: true,
     });
 
-    // Add peak time analysis if we have enough data
     if (dayCount >= 7) {
       const recentDays = chartData.days.slice(-7);
       const recentMax = Math.max(...recentDays.map(d => d.value));
@@ -267,6 +248,7 @@ export async function execute(
       embeds: [embed],
       files: [chart],
     });
+
   } catch (error) {
     console.error('Error generating chart:', error);
 

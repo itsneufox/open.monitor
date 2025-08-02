@@ -67,7 +67,7 @@ export async function execute(client: CustomClient): Promise<void> {
     console.error('Error loading guild configurations:', error);
   }
 
-  // Set interval for status updates (every 3 minutes)
+  // Set interval for status updates (every 10 minutes)
   setInterval(async () => {
     for (const guild of client.guilds.cache.values()) {
       try {
@@ -90,8 +90,8 @@ export async function execute(client: CustomClient): Promise<void> {
           continue;
         }
 
-        // Update next check time (every 3 minutes)
-        interval.next = Date.now() + 180000;
+        // Update next check time (every 10 minutes)
+        interval.next = Date.now() + 600000; // 10 minutes = 600000ms
 
         // Get server uptime stats
         let onlineStats = await client.uptimes.get(activeServer.id);
@@ -295,7 +295,7 @@ export async function execute(client: CustomClient): Promise<void> {
         console.error(`Error processing guild ${guild.name}:`, error);
       }
     }
-  }, 180000); // 3 minutes
+  }, 600000); // 10 minutes
 
   // Set interval for daily chart generation (check every hour)
   setInterval(async () => {
@@ -363,17 +363,36 @@ export async function execute(client: CustomClient): Promise<void> {
                 const color = getRoleColor(guild);
                 const chart = await getChart(data, color);
 
+                // 🗑️ Delete old chart message if it exists
+                if (data.msg) {
+                  try {
+                    const oldMessage = await chartChannel.messages.fetch(data.msg);
+                    await oldMessage.delete();
+                    if (!isProduction) {
+                      console.log(`Deleted old chart message for ${activeServer.name} in ${guild.name}`);
+                    }
+                  } catch (error) {
+                    // Old message might already be deleted or not found, continue anyway
+                    if (!isProduction) {
+                      console.log(`Could not delete old chart message for ${activeServer.name}: ${error}`);
+                    }
+                  }
+                }
+
+                // Send new chart message
                 const msg = await chartChannel.send({
                   content: `**Daily Chart for ${activeServer.name}**`,
                   files: [chart],
                 });
+                
+                // Update the message ID for future deletion
                 data.msg = msg.id;
                 await client.maxPlayers.set(activeServer.id, data);
 
                 chartsGenerated++;
                 if (!isProduction) {
                   console.log(
-                    `Chart sent to ${guild.name} for ${activeServer.name}`
+                    `Chart sent to ${guild.name} for ${activeServer.name} (old chart deleted)`
                   );
                 }
               } catch (chartError) {
@@ -420,7 +439,7 @@ export async function execute(client: CustomClient): Promise<void> {
   if (!isProduction) {
     setInterval(() => {
       const queueStats = client.rateLimitManager.getQueueStats();
-      const activeQueues = Object.entries(queueStats).filter(([_, count]) => (count as number) > 0);
+      const activeQueues = Object.entries(queueStats).filter(([_, stats]) => (stats as any).size > 0);
       
       if (activeQueues.length > 0) {
         console.log('Rate limit queue statistics:', activeQueues);

@@ -1,5 +1,6 @@
 import * as dgram from 'dgram';
 import { ServerConfig } from '../types';
+import { SecurityValidator } from './securityValidator';
 
 interface SAMPInfo {
   password: boolean;
@@ -95,7 +96,9 @@ export class SAMPQuery {
   // OPCODE 'i' - Server Information
   private parseInfoResponse(data: Buffer): SAMPInfo | null {
     try {
-      let offset = 11; // Skip header
+      let offset = 11; // Skip validated header
+
+      if (offset + 7 > data.length) return null; // Need minimum fields
 
       const password = data.readUInt8(offset) === 1;
       offset += 1;
@@ -106,36 +109,57 @@ export class SAMPQuery {
       const maxplayers = data.readUInt16LE(offset);
       offset += 2;
 
-      const hostnameLength = data.readUInt32LE(offset);
+      // Validate hostname string
+      const hostnameValidation = SecurityValidator.validateStringField(data, offset, 128);
+      if (!hostnameValidation.valid) {
+        console.warn('Invalid hostname field in server response');
+        return null;
+      }
+
+      const hostnameLength = hostnameValidation.length;
       offset += 4;
 
-      const hostname = data
-        .subarray(offset, offset + hostnameLength)
-        .toString('utf8');
+      const hostname = data.subarray(offset, offset + hostnameLength).toString('utf8');
       offset += hostnameLength;
 
-      const gamemodeLength = data.readUInt32LE(offset);
+      // Validate gamemode string
+      const gamemodeValidation = SecurityValidator.validateStringField(data, offset, 64);
+      if (!gamemodeValidation.valid) {
+        console.warn('Invalid gamemode field in server response');
+        return null;
+      }
+
+      const gamemodeLength = gamemodeValidation.length;
       offset += 4;
 
-      const gamemode = data
-        .subarray(offset, offset + gamemodeLength)
-        .toString('utf8');
+      const gamemode = data.subarray(offset, offset + gamemodeLength).toString('utf8');
       offset += gamemodeLength;
 
-      const languageLength = data.readUInt32LE(offset);
+      // Validate language string
+      const languageValidation = SecurityValidator.validateStringField(data, offset, 64);
+      if (!languageValidation.valid) {
+        console.warn('Invalid language field in server response');
+        return null;
+      }
+
+      const languageLength = languageValidation.length;
       offset += 4;
 
-      const language = data
-        .subarray(offset, offset + languageLength)
-        .toString('utf8');
+      const language = data.subarray(offset, offset + languageLength).toString('utf8');
+
+      // Sanity check values
+      if (players > 1000 || maxplayers > 1000 || players > maxplayers) {
+        console.warn(`Suspicious player count values: ${players}/${maxplayers}`);
+        return null;
+      }
 
       return {
         password,
         players,
         maxplayers,
-        hostname,
-        gamemode,
-        language,
+        hostname: hostname.slice(0, 128), // Truncate to prevent overflow
+        gamemode: gamemode.slice(0, 64),
+        language: language.slice(0, 64),
       };
     } catch (error) {
       console.error('Error parsing SA:MP info response:', error);
@@ -346,9 +370,20 @@ export class SAMPQuery {
     opcode: string,
     customPacket?: Buffer
   ): Promise<Buffer | null> {
+    // Security check before querying
+    if (!SecurityValidator.validateServerIP(server.ip)) {
+      console.warn(`Blocked query to invalid IP: ${server.ip}`);
+      return null;
+    }
+
+    if (!SecurityValidator.canQueryIP(server.ip, 'global')) {
+      console.warn(`Rate limit exceeded for IP: ${server.ip}`);
+      return null;
+    }
+
     return new Promise(resolve => {
       const socket = dgram.createSocket('udp4');
-      const timeoutMs = 8000;
+      const timeoutMs = 5000; // timeout for security
 
       const timeout = setTimeout(() => {
         socket.close();
@@ -358,6 +393,14 @@ export class SAMPQuery {
       socket.on('message', data => {
         clearTimeout(timeout);
         socket.close();
+
+        // Validate response before processing
+        if (!SecurityValidator.validateSAMPResponse(data, server, opcode)) {
+          console.warn(`Invalid response from ${server.ip}:${server.port}`);
+          resolve(null);
+          return;
+        }
+
         resolve(data);
       });
 
@@ -368,8 +411,7 @@ export class SAMPQuery {
         resolve(null);
       });
 
-      const packet =
-        customPacket || this.createPacket(server.ip, server.port, opcode);
+      const packet = customPacket || this.createPacket(server.ip, server.port, opcode);
 
       socket.send(packet, server.port, server.ip, error => {
         if (error) {
