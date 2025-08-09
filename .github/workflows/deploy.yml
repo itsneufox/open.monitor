@@ -1,8 +1,3 @@
-name: Deploy to CT 109
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
 jobs:
   deploy:
     runs-on: self-hosted
@@ -10,7 +5,23 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-     
+
+    - name: Install build dependencies for node-gyp / canvas
+      run: |
+        if command -v apk >/dev/null 2>&1; then
+          echo "Detected Alpine Linux runner"
+          sudo apk add --no-cache python3 make g++ pkgconfig cairo-dev pango-dev giflib-dev
+          sudo ln -sf python3 /usr/bin/python
+        elif command -v apt-get >/dev/null 2>&1; then
+          echo "Detected Debian/Ubuntu runner"
+          sudo apt-get update
+          sudo apt-get install -y python3 make g++ pkg-config libcairo2-dev libpango1.0-dev libgif-dev
+          sudo ln -sf python3 /usr/bin/python
+        else
+          echo "Unknown OS. Please install build dependencies manually."
+          exit 1
+        fi
+
     - name: Create/Update environment file
       run: |
         echo "Creating/updating .env file..."
@@ -36,21 +47,18 @@ jobs:
         echo "Working directory: $(pwd)"
         echo "Repository: ${{ github.repository }}"
         echo "Commit: ${{ github.sha }}"
-       
+
         echo "Stopping existing containers..."
         sudo docker-compose -f /opt/open.monitor/docker-compose.yml down --timeout 30 || true
        
-        # CLEAN THE DEPLOYMENT DIRECTORY FIRST
         echo "Cleaning deployment directory..."
         sudo rm -rf /opt/open.monitor/*
         sudo mkdir -p /opt/open.monitor
        
-        # Copy files to deployment directory
         echo "Copying files to /opt/open.monitor..."
         sudo cp -r * /opt/open.monitor/
         sudo chown -R github-runner:github-runner /opt/open.monitor
        
-        # Change to deployment directory
         cd /opt/open.monitor
        
         echo "Cleaning up old images..."
@@ -65,7 +73,6 @@ jobs:
         echo "Waiting for services to start..."
         sleep 15
        
-        # Check if bot container is running (using correct container name)
         if [ "$(sudo docker ps -q -f name=openmonitor-bot -f status=running)" ]; then
           echo "Deployment successful!"
           echo "Container status:"
