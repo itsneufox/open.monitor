@@ -4,7 +4,8 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN apk add --no-cache python3 make g++ libc6-compat
+# Install build tools and libraries needed for native modules like canvas
+RUN apk add --no-cache python3 make g++ libc6-compat pkgconfig pixman-dev cairo-dev pango-dev giflib-dev
 
 RUN npm ci && npm cache clean --force
 
