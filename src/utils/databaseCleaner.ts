@@ -1,4 +1,4 @@
-import { CustomClient } from '../types';
+import { CustomClient, getServerDataKey } from '../types';
 
 class DatabaseCleaner {
   private client: CustomClient;
@@ -7,84 +7,77 @@ class DatabaseCleaner {
     this.client = client;
   }
 
-  // Clean up data for a specific server
   async cleanupServer(
+    guildId: string,
     serverId: string
   ): Promise<{ success: boolean; errors: string[] }> {
-    console.log(`🧹 Cleaning up database data for server: ${serverId}`);
+    console.log(`Cleaning up database data for server: ${serverId} in guild: ${guildId}`);
     const errors: string[] = [];
 
     try {
-      // Remove chart data
-      await this.client.maxPlayers.delete(serverId);
-      console.log(`  ✅ Removed chart data for ${serverId}`);
+      const serverDataKey = getServerDataKey(guildId, serverId);
+      await this.client.maxPlayers.delete(serverDataKey);
+      console.log(`Removed chart data for ${serverDataKey}`);
     } catch (error) {
       const errorMsg = `Failed to remove chart data: ${error}`;
       errors.push(errorMsg);
-      console.error(`  ❌ ${errorMsg}`);
+      console.error(errorMsg);
     }
 
     try {
-      // Remove uptime data
-      await this.client.uptimes.delete(serverId);
-      console.log(`  ✅ Removed uptime data for ${serverId}`);
+      const serverDataKey = getServerDataKey(guildId, serverId);
+      await this.client.uptimes.delete(serverDataKey);
+      console.log(`Removed uptime data for ${serverDataKey}`);
     } catch (error) {
       const errorMsg = `Failed to remove uptime data: ${error}`;
       errors.push(errorMsg);
-      console.error(`  ❌ ${errorMsg}`);
+      console.error(errorMsg);
     }
 
     return { success: errors.length === 0, errors };
   }
 
-  // Clean up data for an entire guild
   async cleanupGuild(
     guildId: string
   ): Promise<{ success: boolean; serversProcessed: number; errors: string[] }> {
-    console.log(`🧹 Cleaning up database data for guild: ${guildId}`);
+    console.log(`Cleaning up database data for guild: ${guildId}`);
     const errors: string[] = [];
     let serversProcessed = 0;
 
     try {
-      // Get all servers for this guild
       const servers = (await this.client.servers.get(guildId)) || [];
 
-      // Clean up each server's data
       for (const server of servers) {
-        const result = await this.cleanupServer(server.id);
+        const result = await this.cleanupServer(guildId, server.id);
         serversProcessed++;
         if (!result.success) {
           errors.push(...result.errors);
         }
       }
 
-      // Remove guild's server list
       await this.client.servers.delete(guildId);
-      console.log(`  ✅ Removed server list for guild ${guildId}`);
+      console.log(`Removed server list for guild ${guildId}`);
 
-      // Remove guild's interval config
       await this.client.intervals.delete(guildId);
-      console.log(`  ✅ Removed interval config for guild ${guildId}`);
+      console.log(`Removed interval config for guild ${guildId}`);
 
-      // Remove from cache
       this.client.guildConfigs.delete(guildId);
-      console.log(`  ✅ Removed guild config from cache`);
+      console.log(`Removed guild config from cache`);
     } catch (error) {
       const errorMsg = `Guild cleanup error: ${error}`;
       errors.push(errorMsg);
-      console.error(`  ❌ ${errorMsg}`);
+      console.error(errorMsg);
     }
 
     return { success: errors.length === 0, serversProcessed, errors };
   }
 
-  // Clean old chart data (keep only last 30 days)
   async cleanupOldChartData(): Promise<{
     serversProcessed: number;
     dataPointsRemoved: number;
     errors: string[];
   }> {
-    console.log('🧹 Cleaning up old chart data...');
+    console.log('Cleaning up old chart data...');
     const errors: string[] = [];
     let serversProcessed = 0;
     let dataPointsRemoved = 0;
@@ -94,7 +87,8 @@ class DatabaseCleaner {
     for (const [guildId, guildConfig] of this.client.guildConfigs.entries()) {
       for (const server of guildConfig.servers) {
         try {
-          const chartData = await this.client.maxPlayers.get(server.id);
+          const serverDataKey = getServerDataKey(guildId, server.id);
+          const chartData = await this.client.maxPlayers.get(serverDataKey);
           if (chartData?.days) {
             const originalLength = chartData.days.length;
             chartData.days = chartData.days.filter(
@@ -103,10 +97,10 @@ class DatabaseCleaner {
             const newLength = chartData.days.length;
 
             if (originalLength > newLength) {
-              await this.client.maxPlayers.set(server.id, chartData);
+              await this.client.maxPlayers.set(serverDataKey, chartData);
               dataPointsRemoved += originalLength - newLength;
               console.log(
-                `  🗑️  Removed ${originalLength - newLength} old data points from ${server.id}`
+                `Removed ${originalLength - newLength} old data points from ${serverDataKey}`
               );
             }
           }
@@ -120,21 +114,17 @@ class DatabaseCleaner {
     return { serversProcessed, dataPointsRemoved, errors };
   }
 
-  // Simple periodic cleanup
   async runPeriodicCleanup(): Promise<{ summary: string; errors: string[] }> {
-    console.log('🧹 Running periodic database cleanup...');
+    console.log('Running periodic database cleanup...');
 
-    // Just clean old chart data for now
     const chartResult = await this.cleanupOldChartData();
 
     const summary = `Removed ${chartResult.dataPointsRemoved} old chart entries from ${chartResult.serversProcessed} servers`;
 
     if (chartResult.errors.length > 0) {
-      console.warn(
-        `⚠️  Cleanup completed with ${chartResult.errors.length} errors`
-      );
+      console.warn(`Cleanup completed with ${chartResult.errors.length} errors`);
     } else {
-      console.log(`✅ Periodic cleanup completed: ${summary}`);
+      console.log(`Periodic cleanup completed: ${summary}`);
     }
 
     return { summary, errors: chartResult.errors };

@@ -6,6 +6,7 @@ import {
 } from 'discord.js';
 import { CustomClient } from '../types';
 import { getPlayerCount, getStatus, getRoleColor } from '../utils';
+import { getServerDataKey } from '../types';
 
 export const data = new SlashCommandBuilder()
   .setName('forceupdate')
@@ -212,7 +213,7 @@ async function performGuildUpdate(
   chartData.name = info.name;
   chartData.maxPlayers = info.maxPlayers;
 
-  await client.maxPlayers.set(activeServer.id, chartData);
+await client.maxPlayers.set(getServerDataKey(guildId, activeServer.id), chartData);
 
   // Update uptime stats
   if (info.isOnline) {

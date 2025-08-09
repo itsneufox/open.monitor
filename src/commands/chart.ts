@@ -5,7 +5,7 @@ import {
   MessageFlags,
 } from 'discord.js';
 import { getChart, getRoleColor } from '../utils';
-import { CustomClient, ChartData } from '../types';
+import { CustomClient, ChartData, getServerDataKey } from '../types';
 
 export const data = new SlashCommandBuilder()
   .setName('chart')
@@ -28,7 +28,7 @@ export async function execute(
 
   if (!interaction.guildId) {
     await interaction.editReply(
-      '❌ This command can only be used in a server.'
+      'This command can only be used in a server.'
     );
     return;
   }
@@ -37,12 +37,11 @@ export async function execute(
   if (servers.length === 0) {
     const embed = new EmbedBuilder()
       .setColor(0xff6b6b)
-      .setTitle('❌ No Servers Configured')
+      .setTitle('No Servers Configured')
       .setDescription('No servers have been configured for this guild.')
       .addFields({
         name: 'Getting Started',
-        value:
-          'Use `/server add` to configure a SA:MP/open.mp server to monitor.',
+        value: 'Use `/server add` to configure a SA:MP/open.mp server to monitor.',
       })
       .setTimestamp();
 
@@ -59,7 +58,7 @@ export async function execute(
     );
     if (!targetServer) {
       await interaction.editReply(
-        '❌ Server not found. Use `/server list` to see available servers.'
+        'Server not found. Use `/server list` to see available servers.'
       );
       return;
     }
@@ -70,7 +69,7 @@ export async function execute(
         targetServer = servers[0];
       } else {
         await interaction.editReply(
-          '❌ No active server set and multiple servers available. Use `/server activate` to set an active server, or specify which server to show chart for.'
+          'No active server set and multiple servers available. Use `/server activate` to set an active server, or specify which server to show chart for.'
         );
         return;
       }
@@ -78,7 +77,7 @@ export async function execute(
       targetServer = servers.find(s => s.id === intervalConfig.activeServerId);
       if (!targetServer) {
         await interaction.editReply(
-          '❌ Active server not found. Use `/server activate` to set a valid server.'
+          'Active server not found. Use `/server activate` to set a valid server.'
         );
         return;
       }
@@ -86,14 +85,13 @@ export async function execute(
   }
 
   if (!targetServer) {
-    await interaction.editReply('❌ Unable to determine target server.');
+    await interaction.editReply('Unable to determine target server.');
     return;
   }
 
   try {
-    const chartData = (await client.maxPlayers.get(targetServer.id)) as
-      | ChartData
-      | undefined;
+    const serverDataKey = getServerDataKey(interaction.guildId, targetServer.id);
+    const chartData = (await client.maxPlayers.get(serverDataKey)) as ChartData | undefined;
 
     if (!chartData || !chartData.days || chartData.days.length === 0) {
       const embed = new EmbedBuilder()
@@ -105,14 +103,12 @@ export async function execute(
         .addFields(
           {
             name: 'Data Collection',
-            value:
-              'The bot collects player data every 10 minutes when monitoring is enabled.',
+            value: 'The bot collects player data every 10 minutes when monitoring is enabled.',
             inline: false,
           },
           {
             name: 'Enable Monitoring',
-            value:
-              'Use `/monitor setup` to start collecting data automatically.',
+            value: 'Use `/monitor setup` to start collecting data automatically.',
             inline: false,
           }
         )
@@ -133,8 +129,7 @@ export async function execute(
         .addFields(
           {
             name: 'Chart Requirements',
-            value:
-              'At least 2 days of data are needed to generate a meaningful chart.',
+            value: 'At least 2 days of data are needed to generate a meaningful chart.',
             inline: false,
           },
           {
@@ -150,7 +145,6 @@ export async function execute(
       return;
     }
 
-    // Calculate statistics
     const values = chartData.days.map(d => d.value);
     const overallMax = Math.max(...values);
     const overallMin = Math.min(...values);
@@ -159,7 +153,6 @@ export async function execute(
     );
     const dayCount = chartData.days.length;
 
-    // Calculate trend (comparing last 7 days to previous 7 days)
     let trendText = 'No trend data';
     if (dayCount >= 14) {
       const recent7 = values.slice(-7);
@@ -238,8 +231,8 @@ export async function execute(
       const peakDay = recentDays.find(d => d.value === recentMax);
       const dayName = peakDay
         ? new Date(peakDay.date).toLocaleDateString('en-US', {
-            weekday: 'long',
-          })
+          weekday: 'long',
+        })
         : 'Unknown';
 
       embed.addFields({
@@ -253,18 +246,19 @@ export async function execute(
       embeds: [embed],
       files: [chart],
     });
+
   } catch (error) {
     console.error('Error generating chart:', error);
 
     const errorEmbed = new EmbedBuilder()
       .setColor(0xff0000)
-      .setTitle('❌ Chart Generation Failed')
+      .setTitle('Chart Generation Failed')
       .setDescription(`Failed to generate chart for **${targetServer.name}**.`)
       .addFields(
         {
           name: 'Possible Causes',
           value:
-            '• Chart service temporarily unavailable\n• Invalid data in database\n• Network connectivity issues',
+            'Chart service temporarily unavailable\nInvalid data in database\nNetwork connectivity issues',
           inline: false,
         },
         {

@@ -1,14 +1,11 @@
 import { Events, TextChannel, VoiceChannel, ChannelType } from 'discord.js';
 import { getChart, getStatus, getPlayerCount, getRoleColor } from '../utils';
-import { CustomClient } from '../types';
+import { CustomClient, getServerDataKey } from '../types';
 
 export const name = Events.ClientReady;
 export const once = true;
 
-const lastChannelUpdate = new Map<
-  string,
-  { time: number; count: number; online: boolean }
->();
+const lastChannelUpdate = new Map<string, { time: number; count: number; online: boolean }>();
 
 export async function execute(client: CustomClient): Promise<void> {
   const isProduction = process.env.LOG_LEVEL === 'production';
@@ -42,9 +39,7 @@ export async function execute(client: CustomClient): Promise<void> {
       );
     }
 
-    const nextCheck = (await client.maxPlayers.get('next')) as
-      | number
-      | undefined;
+    const nextCheck = (await client.maxPlayers.get('next')) as number | undefined;
     if (!nextCheck) {
       const now = new Date();
       const tomorrow = new Date(now);
@@ -83,12 +78,14 @@ export async function execute(client: CustomClient): Promise<void> {
 
         interval.next = Date.now() + 600000;
 
-        let onlineStats = await client.uptimes.get(activeServer.id);
+        const serverDataKey = getServerDataKey(guild.id, activeServer.id);
+
+        let onlineStats = await client.uptimes.get(serverDataKey);
         if (!onlineStats) {
           onlineStats = { uptime: 0, downtime: 0 };
         }
 
-        let chartData = await client.maxPlayers.get(activeServer.id);
+        let chartData = await client.maxPlayers.get(serverDataKey);
         if (!chartData) {
           chartData = {
             maxPlayersToday: 0,
@@ -96,7 +93,7 @@ export async function execute(client: CustomClient): Promise<void> {
             name: '',
             maxPlayers: 0,
           };
-          await client.maxPlayers.set(activeServer.id, chartData);
+          await client.maxPlayers.set(serverDataKey, chartData);
         }
 
         const info = await client.rateLimitManager.executeWithRetry(
@@ -110,14 +107,14 @@ export async function execute(client: CustomClient): Promise<void> {
         chartData.name = info.name;
         chartData.maxPlayers = info.maxPlayers;
 
-        await client.maxPlayers.set(activeServer.id, chartData);
+        await client.maxPlayers.set(serverDataKey, chartData);
 
         if (info.isOnline) {
           onlineStats.uptime++;
         } else {
           onlineStats.downtime++;
         }
-        await client.uptimes.set(activeServer.id, onlineStats);
+        await client.uptimes.set(serverDataKey, onlineStats);
 
         if (interval.statusChannel) {
           try {
@@ -186,7 +183,7 @@ export async function execute(client: CustomClient): Promise<void> {
           };
           const timeSinceUpdate = Date.now() - guildUpdateData.time;
 
-          const timeBasedUpdate = timeSinceUpdate > 600000; // 10 minutes
+          const timeBasedUpdate = timeSinceUpdate > 600000;
           const statusChange = info.isOnline !== guildUpdateData.online;
 
           if (timeBasedUpdate || statusChange) {
@@ -259,7 +256,23 @@ export async function execute(client: CustomClient): Promise<void> {
     }
   }, 600000);
 
-  setInterval(async () => {
+  function msUntilMidnight(): number {
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setDate(midnight.getDate() + 1);
+    midnight.setHours(0, 0, 0, 0);
+    return midnight.getTime() - now.getTime();
+  }
+
+  setTimeout(async () => {
+    await runDailyChartGeneration();
+
+    setInterval(async () => {
+      await runDailyChartGeneration();
+    }, 86400000);
+  }, msUntilMidnight());
+
+  async function runDailyChartGeneration() {
     try {
       const nextCheck = (await client.maxPlayers.get('next')) as number;
       if (!nextCheck || Date.now() < nextCheck) return;
@@ -288,23 +301,42 @@ export async function execute(client: CustomClient): Promise<void> {
           );
           if (!activeServer) continue;
 
-          const data = await client.maxPlayers.get(activeServer.id);
+          const serverDataKey = getServerDataKey(guild.id, activeServer.id);
+          const data = await client.maxPlayers.get(serverDataKey);
           if (!data || !data.days) continue;
 
+          let chartValue = Math.max(data.maxPlayersToday, 0);
+
+          if (chartValue === 0) {
+            try {
+              const currentInfo = await client.rateLimitManager.executeWithRetry(
+                () => getPlayerCount(activeServer, guild.id, true),
+                2
+              );
+              chartValue = currentInfo.isOnline ? currentInfo.playerCount : 0;
+              if (!isProduction) {
+                console.log(`Using current player count for chart: ${chartValue} players`);
+              }
+            } catch (error) {
+              if (!isProduction) {
+                console.log(`Could not get current player count for chart, using 0`);
+              }
+              chartValue = 0;
+            }
+          }
+
           const chartDataPoint = {
-            value: Math.max(0, data.maxPlayersToday),
+            value: chartValue,
             date: Date.now(),
           };
 
-          if (chartDataPoint.value >= 0) {
-            data.days.push(chartDataPoint);
-          }
+          data.days.push(chartDataPoint);
 
           if (data.days.length > 30) {
             data.days = data.days.slice(-30);
           }
 
-          await client.maxPlayers.set(activeServer.id, data);
+          await client.maxPlayers.set(serverDataKey, data);
 
           if (data.days.length >= 2) {
             let chartChannel: TextChannel | null = null;
@@ -320,20 +352,14 @@ export async function execute(client: CustomClient): Promise<void> {
 
                 if (data.msg) {
                   try {
-                    const oldMessage = await chartChannel.messages.fetch(
-                      data.msg
-                    );
+                    const oldMessage = await chartChannel.messages.fetch(data.msg);
                     await oldMessage.delete();
                     if (!isProduction) {
-                      console.log(
-                        `Deleted old chart message for ${activeServer.name} in ${guild.name}`
-                      );
+                      console.log(`Deleted old chart message for ${activeServer.name} in ${guild.name}`);
                     }
                   } catch (error) {
                     if (!isProduction) {
-                      console.log(
-                        `Could not delete old chart message for ${activeServer.name}: ${error}`
-                      );
+                      console.log(`Could not delete old chart message for ${activeServer.name}: ${error}`);
                     }
                   }
                 }
@@ -344,27 +370,19 @@ export async function execute(client: CustomClient): Promise<void> {
                 });
 
                 data.msg = msg.id;
-                await client.maxPlayers.set(activeServer.id, data);
+                await client.maxPlayers.set(serverDataKey, data);
 
                 chartsGenerated++;
                 if (!isProduction) {
-                  console.log(
-                    `Chart sent to ${guild.name} for ${activeServer.name} (old chart deleted)`
-                  );
+                  console.log(`Chart sent to ${guild.name} for ${activeServer.name} (value: ${chartValue})`);
                 }
               } catch (chartError) {
-                console.error(
-                  `Failed to send chart to ${guild.name}:`,
-                  chartError
-                );
+                console.error(`Failed to send chart to ${guild.name}:`, chartError);
               }
             }
           }
         } catch (error) {
-          console.error(
-            `Error generating chart for guild ${guild.name}:`,
-            error
-          );
+          console.error(`Error generating chart for guild ${guild.name}:`, error);
         }
       }
 
@@ -379,16 +397,14 @@ export async function execute(client: CustomClient): Promise<void> {
             if (!guildConfig?.interval?.activeServerId) continue;
 
             const activeServerId = guildConfig.interval.activeServerId;
-            const data = await client.maxPlayers.get(activeServerId);
+            const serverDataKey = getServerDataKey(guild.id, activeServerId);
+            const data = await client.maxPlayers.get(serverDataKey);
             if (!data) continue;
 
             data.maxPlayersToday = 0;
-            await client.maxPlayers.set(activeServerId, data);
+            await client.maxPlayers.set(serverDataKey, data);
           } catch (error) {
-            console.error(
-              `Error resetting daily data for guild ${guild.name}:`,
-              error
-            );
+            console.error(`Error resetting daily data for guild ${guild.name}:`, error);
           }
         }
         if (!isProduction) {
@@ -398,7 +414,7 @@ export async function execute(client: CustomClient): Promise<void> {
     } catch (error) {
       console.error('Error in daily chart generation:', error);
     }
-  }, 3600000);
+  }
 
   if (!isProduction) {
     setInterval(() => {

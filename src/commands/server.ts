@@ -9,6 +9,7 @@ import { checkPermissionOrReply } from '../utils/permissions';
 import { SecurityValidator } from '../utils/securityValidator';
 import { InputValidator } from '../utils/inputValidator';
 import { DatabaseCleaner } from '../utils/databaseCleaner';
+import { getServerDataKey } from '../types';
 
 export const data = new SlashCommandBuilder()
   .setName('server')
@@ -180,10 +181,10 @@ async function handleAdd(
   if (!SecurityValidator.validateServerIP(ip)) {
     await interaction.editReply(
       '❌ Invalid or blocked IP address. Please use a valid public IPv4 address.\n\n' +
-        '**Blocked ranges:**\n' +
-        '• Private networks (10.x.x.x, 192.168.x.x, 172.16-31.x.x)\n' +
-        '• Loopback (127.x.x.x) - only allowed in development\n' +
-        '• Invalid ranges (0.x.x.x, 169.254.x.x, 224.x.x.x, 255.x.x.x)'
+      '**Blocked ranges:**\n' +
+      '• Private networks (10.x.x.x, 192.168.x.x, 172.16-31.x.x)\n' +
+      '• Loopback (127.x.x.x) - only allowed in development\n' +
+      '• Invalid ranges (0.x.x.x, 169.254.x.x, 224.x.x.x, 255.x.x.x)'
     );
     return;
   }
@@ -222,10 +223,10 @@ async function handleAdd(
   if (!SecurityValidator.canQueryIP(ip, interaction.guildId!)) {
     await interaction.editReply(
       '❌ Rate limit exceeded for this IP address. Please try again later.\n\n' +
-        '**Rate limits:**\n' +
-        '• Maximum 12 queries per hour per IP\n' +
-        '• Maximum 3 different Discord servers per IP\n' +
-        '• Minimum 30 seconds between queries'
+      '**Rate limits:**\n' +
+      '• Maximum 12 queries per hour per IP\n' +
+      '• Maximum 3 different Discord servers per IP\n' +
+      '• Minimum 30 seconds between queries'
     );
     return;
   }
@@ -351,9 +352,10 @@ async function handleAdd(
     client.guildConfigs.set(interaction.guildId!, guildConfig);
 
     // Initialize server data in database
-    const existingData = await client.maxPlayers.get(serverId);
+    const serverDataKey = getServerDataKey(interaction.guildId!, serverId);
+    const existingData = await client.maxPlayers.get(serverDataKey);
     if (!existingData) {
-      await client.maxPlayers.set(serverId, {
+      await client.maxPlayers.set(serverDataKey, {
         maxPlayersToday: testResult?.players || 0,
         days: [],
         name: testResult?.hostname || finalServerName,
@@ -701,7 +703,7 @@ async function handleRemove(
 
     // Clean up all database data for this server
     const cleaner = new DatabaseCleaner(client);
-    await cleaner.cleanupServer(server.id);
+    await cleaner.cleanupServer(interaction.guildId!, server.id);
 
     // If this was the active server, handle accordingly
     if (isActiveServer && intervalConfig) {
@@ -887,7 +889,7 @@ async function handleStatus(
     if (!rateLimitCheck.allowed) {
       await interaction.editReply(
         `❌ Fresh status requests are limited to prevent rate limits. Please wait ${Math.ceil((rateLimitCheck.remainingTime || 0) / 1000)} seconds.\n\n` +
-          `💡 **Tip:** Regular status checks (without \`fresh: true\`) are unlimited and show recent data.`
+        `💡 **Tip:** Regular status checks (without \`fresh: true\`) are unlimited and show recent data.`
       );
       return;
     }
