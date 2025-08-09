@@ -1,3 +1,8 @@
+name: Deploy to CT 109
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 jobs:
   deploy:
     runs-on: self-hosted
