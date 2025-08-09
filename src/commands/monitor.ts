@@ -5,10 +5,12 @@ import {
   TextChannel,
   VoiceChannel,
   EmbedBuilder,
+  MessageFlags,
 } from 'discord.js';
 import { CustomClient } from '../types';
 import { checkPermissionOrReply } from '../utils/permissions';
 import { InputValidator } from '../utils/inputValidator';
+import { getPlayerCount } from '../utils';
 
 export const data = new SlashCommandBuilder()
   .setName('monitor')
@@ -34,15 +36,15 @@ export const data = new SlashCommandBuilder()
       .addChannelOption(option =>
         option
           .setName('player_count_channel')
-          .setDescription('Voice/text channel to show player count (optional)')
-          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildVoice)
+          .setDescription('Voice channel to show player count (optional)')
+          .addChannelTypes(ChannelType.GuildVoice)
           .setRequired(false)
       )
       .addChannelOption(option =>
         option
           .setName('server_ip_channel')
-          .setDescription('Voice/text channel to show server IP (optional)')
-          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildVoice)
+          .setDescription('Voice channel to show server IP (optional)')
+          .addChannelTypes(ChannelType.GuildVoice)
           .setRequired(false)
       )
   )
@@ -92,13 +94,12 @@ async function handleSetup(
   interaction: ChatInputCommandInteraction,
   client: CustomClient
 ) {
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // Rate limiting
   const rateLimitCheck = InputValidator.checkCommandRateLimit(
     interaction.user.id,
     'monitor-setup',
-    2 // Max 2 setups per minute
+    2
   );
 
   if (!rateLimitCheck.allowed) {
@@ -108,14 +109,17 @@ async function handleSetup(
     return;
   }
 
-  // Validate guild ID
-  const guildValidation = InputValidator.validateDiscordId(interaction.guildId!, 'guild');
+  const guildValidation = InputValidator.validateDiscordId(
+    interaction.guildId!,
+    'guild'
+  );
   if (!guildValidation.valid) {
-    await interaction.editReply(`❌ Invalid guild context: ${guildValidation.error}`);
+    await interaction.editReply(
+      `❌ Invalid guild context: ${guildValidation.error}`
+    );
     return;
   }
 
-  // Check if server is configured
   const servers = (await client.servers.get(interaction.guildId!)) || [];
   if (servers.length === 0) {
     await interaction.editReply(
@@ -124,7 +128,6 @@ async function handleSetup(
     return;
   }
 
-  // Check if active server is set
   const intervalConfig = await client.intervals.get(interaction.guildId!);
   if (!intervalConfig?.activeServerId) {
     await interaction.editReply(
@@ -133,17 +136,28 @@ async function handleSetup(
     return;
   }
 
-  const statusChannel = interaction.options.getChannel('status_channel') as TextChannel;
-  const chartChannel = interaction.options.getChannel('chart_channel') as TextChannel | null;
-  const playerCountChannel = interaction.options.getChannel('player_count_channel') as TextChannel | VoiceChannel | null;
-  const serverIpChannel = interaction.options.getChannel('server_ip_channel') as TextChannel | VoiceChannel | null;
+  const statusChannel = interaction.options.getChannel(
+    'status_channel'
+  ) as TextChannel;
+  const chartChannel = interaction.options.getChannel(
+    'chart_channel'
+  ) as TextChannel | null;
+  const playerCountChannel = interaction.options.getChannel(
+    'player_count_channel'
+  ) as VoiceChannel | null;
+  const serverIpChannel = interaction.options.getChannel(
+    'server_ip_channel'
+  ) as VoiceChannel | null;
 
-  // Validate all channel IDs
   const channelValidations = [
     { channel: statusChannel, name: 'status channel', required: true },
     { channel: chartChannel, name: 'chart channel', required: false },
-    { channel: playerCountChannel, name: 'player count channel', required: false },
-    { channel: serverIpChannel, name: 'server IP channel', required: false }
+    {
+      channel: playerCountChannel,
+      name: 'player count channel',
+      required: false,
+    },
+    { channel: serverIpChannel, name: 'server IP channel', required: false },
   ];
 
   for (const { channel, name, required } of channelValidations) {
@@ -153,7 +167,10 @@ async function handleSetup(
     }
 
     if (channel) {
-      const validation = InputValidator.validateDiscordId(channel.id, 'channel');
+      const validation = InputValidator.validateDiscordId(
+        channel.id,
+        'channel'
+      );
       if (!validation.valid) {
         await interaction.editReply(`❌ Invalid ${name}: ${validation.error}`);
         return;
@@ -161,14 +178,12 @@ async function handleSetup(
     }
   }
 
-  // Check bot permissions
   const botMember = interaction.guild!.members.cache.get(client.user!.id);
   if (!botMember) {
     await interaction.editReply('❌ Unable to find bot member in this guild.');
     return;
   }
 
-  // Validate permissions for status channel
   const statusPerms = statusChannel.permissionsFor(botMember);
   if (!statusPerms?.has(['ViewChannel', 'SendMessages', 'EmbedLinks'])) {
     await interaction.editReply(
@@ -177,7 +192,6 @@ async function handleSetup(
     return;
   }
 
-  // Validate permissions for chart channel
   if (chartChannel) {
     const chartPerms = chartChannel.permissionsFor(botMember);
     if (!chartPerms?.has(['ViewChannel', 'SendMessages', 'AttachFiles'])) {
@@ -188,12 +202,11 @@ async function handleSetup(
     }
   }
 
-  // Validate permissions for voice/text channels
   if (playerCountChannel) {
     const playerPerms = playerCountChannel.permissionsFor(botMember);
     if (!playerPerms?.has(['ViewChannel', 'ManageChannels'])) {
       await interaction.editReply(
-        `❌ I need View Channel and Manage Channels permissions in ${playerCountChannel.toString()}`
+        `❌ I need View Channel and Manage Channels permissions in voice channel ${playerCountChannel.toString()}`
       );
       return;
     }
@@ -203,13 +216,12 @@ async function handleSetup(
     const ipPerms = serverIpChannel.permissionsFor(botMember);
     if (!ipPerms?.has(['ViewChannel', 'ManageChannels'])) {
       await interaction.editReply(
-        `❌ I need View Channel and Manage Channels permissions in ${serverIpChannel.toString()}`
+        `❌ I need View Channel and Manage Channels permissions in voice channel ${serverIpChannel.toString()}`
       );
       return;
     }
   }
 
-  // Update interval config - build object properly to avoid undefined issues
   const newConfig = {
     ...intervalConfig,
     statusChannel: statusChannel.id,
@@ -218,7 +230,6 @@ async function handleSetup(
     statusMessage: null,
   };
 
-  // Only add optional channels if they exist
   if (chartChannel) {
     newConfig.chartChannel = chartChannel.id;
   }
@@ -229,8 +240,10 @@ async function handleSetup(
     newConfig.serverIpChannel = serverIpChannel.id;
   }
 
-  // Validate the complete configuration
-  const configValidation = InputValidator.validateGuildConfig(interaction.guildId!, newConfig);
+  const configValidation = InputValidator.validateGuildConfig(
+    interaction.guildId!,
+    newConfig
+  );
   if (!configValidation.valid) {
     await interaction.editReply(
       `❌ Configuration validation failed:\n${configValidation.errors.join('\n')}`
@@ -240,35 +253,74 @@ async function handleSetup(
 
   await client.intervals.set(interaction.guildId!, newConfig);
 
-  // Set initial channel names
-  const activeServer = servers.find(s => s.id === intervalConfig.activeServerId);
+  const activeServer = servers.find(
+    s => s.id === intervalConfig.activeServerId
+  );
   if (activeServer) {
-    // Set IP channel name
-    if (serverIpChannel) {
-      try {
-        const channelNameValidation = InputValidator.validateChannelName(`Server ${activeServer.ip}:${activeServer.port}`);
-        if (channelNameValidation.valid) {
-          await serverIpChannel.setName(channelNameValidation.sanitized!);
-        }
-      } catch (error) {
-        console.error('Failed to set IP channel name:', error);
-      }
-    }
+    console.log(`🔄 Setting initial channel names for ${activeServer.name}...`);
 
-    // Set player count channel name
-    if (playerCountChannel) {
-      try {
-        const channelNameValidation = InputValidator.validateChannelName('Players: Loading...');
-        if (channelNameValidation.valid) {
-          await playerCountChannel.setName(channelNameValidation.sanitized!);
+    try {
+      const info = await getPlayerCount(
+        activeServer,
+        interaction.guildId!,
+        false
+      );
+
+      if (playerCountChannel) {
+        try {
+          const newName = info.isOnline
+            ? `👥 ${info.playerCount}/${info.maxPlayers}`
+            : '❌ Server Offline';
+
+          await playerCountChannel.setName(newName);
+          console.log(`✅ Set player count channel: ${newName}`);
+        } catch (error) {
+          console.error('Failed to set player count channel name:', error);
         }
-      } catch (error) {
-        console.error('Failed to set player count channel name:', error);
+      }
+
+      if (serverIpChannel) {
+        setTimeout(async () => {
+          try {
+            const serverAddress = `${activeServer.ip}:${activeServer.port}`;
+            const newName = `🌐 ${serverAddress}`;
+
+            await serverIpChannel.setName(newName);
+            console.log(`✅ Set server IP channel: ${newName}`);
+          } catch (error) {
+            console.error('Failed to set IP channel name:', error);
+          }
+        }, 3000);
+      }
+    } catch (error) {
+      console.error(
+        'Failed to get server info for initial channel setup:',
+        error
+      );
+
+      if (playerCountChannel) {
+        try {
+          await playerCountChannel.setName('👥 Checking...');
+        } catch (error) {
+          console.error('Failed to set fallback player count name:', error);
+        }
+      }
+
+      if (serverIpChannel) {
+        setTimeout(async () => {
+          try {
+            const serverAddress = `${activeServer.ip}:${activeServer.port}`;
+            const newName = `🌐 ${serverAddress}`;
+
+            await serverIpChannel.setName(newName);
+          } catch (error) {
+            console.error('Failed to set fallback IP channel name:', error);
+          }
+        }, 3000);
       }
     }
   }
 
-  // Update cache
   let guildConfig = client.guildConfigs.get(interaction.guildId!) || {
     servers: [],
   };
@@ -283,7 +335,7 @@ async function handleSetup(
     )
     .addFields(
       { name: 'Status Updates', value: statusChannel.toString(), inline: true },
-      { name: 'Update Frequency', value: 'Every 3 minutes', inline: true },
+      { name: 'Update Frequency', value: 'Every 10 minutes', inline: true },
       {
         name: 'Charts',
         value: chartChannel?.toString() || 'Not configured',
@@ -294,16 +346,16 @@ async function handleSetup(
 
   if (playerCountChannel) {
     embed.addFields({
-      name: 'Player Count Display',
-      value: playerCountChannel.toString(),
+      name: 'Player Count (Voice)',
+      value: `${playerCountChannel.toString()} - Updates every 10 minutes`,
       inline: true,
     });
   }
 
   if (serverIpChannel) {
     embed.addFields({
-      name: 'Server IP Display',
-      value: serverIpChannel.toString(),
+      name: 'Server IP (Voice)',
+      value: `${serverIpChannel.toString()} - Set once during setup`,
       inline: true,
     });
   }
@@ -311,29 +363,22 @@ async function handleSetup(
   embed.addFields({
     name: 'What happens next?',
     value:
-      '• Status updates will start immediately\n• Daily charts will be posted at midnight\n• Use `/monitor disable` to stop monitoring',
-    inline: false,
-  });
-
-  // Add security notice
-  embed.addFields({
-    name: 'Security Features',
-    value:
-      '• All server queries are validated and rate limited\n• Channel updates are queued to respect Discord limits\n• Configuration is validated for security',
+      '• Status updates will start immediately\n• Daily charts will be posted at midnight\n• Voice channels will update automatically',
     inline: false,
   });
 
   await interaction.editReply({ embeds: [embed] });
 
-  // Log successful setup
-  console.log(`✅ Monitoring setup completed by ${interaction.user.tag} in guild ${interaction.guild?.name}`);
+  console.log(
+    `✅ Monitoring setup completed by ${interaction.user.tag} in guild ${interaction.guild?.name}`
+  );
 }
 
 async function handleEnable(
   interaction: ChatInputCommandInteraction,
   client: CustomClient
 ) {
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const intervalConfig = await client.intervals.get(interaction.guildId!);
   if (!intervalConfig) {
@@ -359,7 +404,6 @@ async function handleEnable(
   intervalConfig.next = Date.now();
   await client.intervals.set(interaction.guildId!, intervalConfig);
 
-  // Update cache
   let guildConfig = client.guildConfigs.get(interaction.guildId!) || {
     servers: [],
   };
@@ -367,7 +411,7 @@ async function handleEnable(
   client.guildConfigs.set(interaction.guildId!, guildConfig);
 
   await interaction.editReply(
-    '✅ **Monitoring enabled!** Status updates will begin within 3 minutes.'
+    '✅ **Monitoring enabled!** Status updates will begin within 10 minutes.'
   );
 }
 
@@ -375,7 +419,7 @@ async function handleDisable(
   interaction: ChatInputCommandInteraction,
   client: CustomClient
 ) {
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const intervalConfig = await client.intervals.get(interaction.guildId!);
   if (!intervalConfig || !intervalConfig.enabled) {
@@ -386,7 +430,6 @@ async function handleDisable(
   intervalConfig.enabled = false;
   await client.intervals.set(interaction.guildId!, intervalConfig);
 
-  // Update cache
   let guildConfig = client.guildConfigs.get(interaction.guildId!) || {
     servers: [],
   };
@@ -402,7 +445,7 @@ async function handleStatus(
   interaction: ChatInputCommandInteraction,
   client: CustomClient
 ) {
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const servers = (await client.servers.get(interaction.guildId!)) || [];
   const intervalConfig = await client.intervals.get(interaction.guildId!);
@@ -427,12 +470,12 @@ async function handleStatus(
       s => s.id === intervalConfig.activeServerId
     );
 
-    // Calculate next update time
     const nextUpdate = intervalConfig.next || Date.now();
     const timeUntilUpdate = Math.max(0, nextUpdate - Date.now());
-    const nextUpdateText = timeUntilUpdate > 0
-      ? `<t:${Math.floor(nextUpdate / 1000)}:R>`
-      : 'Very soon';
+    const nextUpdateText =
+      timeUntilUpdate > 0
+        ? `<t:${Math.floor(nextUpdate / 1000)}:R>`
+        : 'Very soon';
 
     embed
       .setDescription(
@@ -471,14 +514,14 @@ async function handleStatus(
           inline: true,
         },
         {
-          name: 'Player Count Channel',
+          name: 'Player Count Voice Channel',
           value: intervalConfig.playerCountChannel
             ? `<#${intervalConfig.playerCountChannel}>`
             : 'Not set',
           inline: true,
         },
         {
-          name: 'Server IP Channel',
+          name: 'Server IP Voice Channel',
           value: intervalConfig.serverIpChannel
             ? `<#${intervalConfig.serverIpChannel}>`
             : 'Not set',
@@ -486,24 +529,17 @@ async function handleStatus(
         }
       );
 
-    // Add helpful info about updates
     embed.addFields({
-      name: 'How to Get Fresh Data',
+      name: 'Update Schedule',
       value:
-        '• **Automatic updates:** Every 10 minutes when monitoring is enabled\n' +
-        '• **Manual check:** Use `/server status fresh:true` (rate limited)\n' +
-        '• **Player data:** Use `/players` for current online players\n' +
-        '• **Charts:** Use `/chart` for historical data',
+        '• **Player Count:** Every 10 minutes\n• **Server IP:** Set once during setup\n• **Status changes:** Immediate when server goes offline',
       inline: false,
     });
 
     embed.addFields({
-      name: 'Rate Limiting Protection',
+      name: 'Manual Commands',
       value:
-        '• **Status updates:** Every 10 minutes automatically\n' +
-        '• **Channel renames:** Max once per 10 minutes per channel\n' +
-        '• **Charts:** Daily at midnight\n' +
-        '• **Manual refreshes:** Limited to prevent Discord rate limits',
+        '• `/server status fresh:true` - Get current server data\n• `/players` - Show online players\n• `/chart` - View historical data',
       inline: false,
     });
   }

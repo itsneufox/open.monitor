@@ -2,6 +2,7 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   EmbedBuilder,
+  MessageFlags,
 } from 'discord.js';
 import { getChart, getRoleColor } from '../utils';
 import { CustomClient, ChartData } from '../types';
@@ -23,7 +24,7 @@ export async function execute(
   interaction: ChatInputCommandInteraction,
   client: CustomClient
 ): Promise<void> {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   if (!interaction.guildId) {
     await interaction.editReply(
@@ -40,7 +41,8 @@ export async function execute(
       .setDescription('No servers have been configured for this guild.')
       .addFields({
         name: 'Getting Started',
-        value: 'Use `/server add` to configure a SA:MP/open.mp server to monitor.',
+        value:
+          'Use `/server add` to configure a SA:MP/open.mp server to monitor.',
       })
       .setTimestamp();
 
@@ -103,12 +105,14 @@ export async function execute(
         .addFields(
           {
             name: 'Data Collection',
-            value: 'The bot collects player data every 10 minutes when monitoring is enabled.',
+            value:
+              'The bot collects player data every 10 minutes when monitoring is enabled.',
             inline: false,
           },
           {
             name: 'Enable Monitoring',
-            value: 'Use `/monitor setup` to start collecting data automatically.',
+            value:
+              'Use `/monitor setup` to start collecting data automatically.',
             inline: false,
           }
         )
@@ -129,7 +133,8 @@ export async function execute(
         .addFields(
           {
             name: 'Chart Requirements',
-            value: 'At least 2 days of data are needed to generate a meaningful chart.',
+            value:
+              'At least 2 days of data are needed to generate a meaningful chart.',
             inline: false,
           },
           {
@@ -248,7 +253,6 @@ export async function execute(
       embeds: [embed],
       files: [chart],
     });
-
   } catch (error) {
     console.error('Error generating chart:', error);
 

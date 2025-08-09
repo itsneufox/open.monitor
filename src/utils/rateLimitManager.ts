@@ -52,7 +52,7 @@ export class RateLimitManager {
         processing: false,
         lastProcessed: 0,
         totalProcessed: 0,
-        errors: 0
+        errors: 0,
       });
     }
 
@@ -61,7 +61,9 @@ export class RateLimitManager {
 
     // Check queue size limit
     if (queue.length >= this.MAX_QUEUE_SIZE) {
-      console.warn(`Queue for ${channelId} is full (${queue.length}/${this.MAX_QUEUE_SIZE}), dropping oldest operation`);
+      console.warn(
+        `Queue for ${channelId} is full (${queue.length}/${this.MAX_QUEUE_SIZE}), dropping oldest operation`
+      );
       const dropped = queue.shift();
       if (dropped) {
         dropped.reject(new Error('Queue overflow - operation dropped'));
@@ -76,7 +78,7 @@ export class RateLimitManager {
         reject,
         priority,
         retries: 0,
-        createdAt: Date.now()
+        createdAt: Date.now(),
       };
 
       // Set timeout for operation
@@ -100,35 +102,40 @@ export class RateLimitManager {
     baseDelay: number = 1000
   ): Promise<T> {
     let lastError: any;
-    
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         return await operation();
       } catch (error: any) {
         lastError = error;
-        
+
         // Don't retry permission errors
         if (error.code === 50013 || error.code === 50001) {
           throw error;
         }
-        
+
         // Don't retry on final attempt
         if (attempt === maxRetries) {
           throw error;
         }
-        
+
         // Calculate delay with exponential backoff
         const delay = baseDelay * Math.pow(2, attempt);
-        console.log(`Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms delay`);
+        console.log(
+          `Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms delay`
+        );
         await this.delay(delay);
       }
     }
-    
+
     throw lastError;
   }
 
-  private insertByPriority(queue: QueuedOperation[], operation: QueuedOperation): void {
-    const priorityOrder = { 'high': 0, 'normal': 1, 'low': 2 };
+  private insertByPriority(
+    queue: QueuedOperation[],
+    operation: QueuedOperation
+  ): void {
+    const priorityOrder = { high: 0, normal: 1, low: 2 };
     const operationPriority = priorityOrder[operation.priority];
 
     let insertIndex = queue.length;
@@ -143,7 +150,10 @@ export class RateLimitManager {
     queue.splice(insertIndex, 0, operation);
   }
 
-  private removeOperationFromQueue(channelId: string, operation: QueuedOperation): boolean {
+  private removeOperationFromQueue(
+    channelId: string,
+    operation: QueuedOperation
+  ): boolean {
     const queue = this.channelUpdateQueues.get(channelId);
     if (!queue) return false;
 
@@ -204,7 +214,6 @@ export class RateLimitManager {
           if (queue.length > 0) {
             await this.delay(2000);
           }
-
         } catch (error: any) {
           stats.errors++;
 
@@ -225,7 +234,9 @@ export class RateLimitManager {
 
             // For permission errors, clear the entire queue
             if (error.code === 50013 || error.code === 50001) {
-              console.warn(`Clearing queue for ${channelId} due to permission error`);
+              console.warn(
+                `Clearing queue for ${channelId} due to permission error`
+              );
               this.clearQueue(channelId);
               break;
             }
@@ -255,10 +266,12 @@ export class RateLimitManager {
     }
 
     // Retry rate limits and network errors
-    return error.code === 429 ||
+    return (
+      error.code === 429 ||
       error.code === 'ENOTFOUND' ||
       error.code === 'ECONNRESET' ||
-      error.message?.includes('timeout');
+      error.message?.includes('timeout')
+    );
   }
 
   private getRetryDelay(retryCount: number): number {
@@ -328,7 +341,7 @@ export class RateLimitManager {
     for (const [channelId, queueStats] of this.queueStats.entries()) {
       stats[channelId] = {
         ...queueStats,
-        isProcessing: this.processing.has(channelId)
+        isProcessing: this.processing.has(channelId),
       };
     }
 
@@ -357,7 +370,7 @@ export class RateLimitManager {
       totalOperations,
       processingQueues: this.processing.size,
       totalProcessed,
-      totalErrors
+      totalErrors,
     };
   }
 

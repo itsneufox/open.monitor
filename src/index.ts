@@ -15,7 +15,10 @@ const requiredEnvVars = ['TOKEN', 'CLIENT_ID', 'DATABASE_URL'];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingEnvVars.length > 0) {
-  console.error('Missing required environment variables:', missingEnvVars.join(', '));
+  console.error(
+    'Missing required environment variables:',
+    missingEnvVars.join(', ')
+  );
   process.exit(1);
 }
 
@@ -60,17 +63,25 @@ function getScriptFiles(directoryPath: string): string[] {
   if (!fs.existsSync(directoryPath)) return [];
 
   const files = fs.readdirSync(directoryPath);
-  const hasTypeScript = files.some(file => file.endsWith('.ts') && !file.endsWith('.d.ts'));
+  const hasTypeScript = files.some(
+    file => file.endsWith('.ts') && !file.endsWith('.d.ts')
+  );
   const hasJavaScript = files.some(file => file.endsWith('.js'));
 
   if (hasTypeScript && !hasJavaScript) {
     console.log('Development mode detected - loading .ts files');
-    return files.filter(file => file.endsWith('.ts') && !file.endsWith('.d.ts'));
+    return files.filter(
+      file => file.endsWith('.ts') && !file.endsWith('.d.ts')
+    );
   } else if (hasJavaScript) {
     console.log('Production mode detected - loading .js files');
     return files.filter(file => file.endsWith('.js'));
   } else {
-    return files.filter(file => file.endsWith('.js') || (file.endsWith('.ts') && !file.endsWith('.d.ts')));
+    return files.filter(
+      file =>
+        file.endsWith('.js') ||
+        (file.endsWith('.ts') && !file.endsWith('.d.ts'))
+    );
   }
 }
 
@@ -97,7 +108,9 @@ for (const file of commandFiles) {
       commands.push(command.data.toJSON());
       console.log(`  Loaded command: ${command.data.name}`);
     } else {
-      console.warn(`  Command at ${filePath} is missing required "data" or "execute" property.`);
+      console.warn(
+        `  Command at ${filePath} is missing required "data" or "execute" property.`
+      );
     }
   } catch (error) {
     console.error(`  Failed to load command ${file}:`, error);
@@ -128,7 +141,9 @@ for (const file of eventFiles) {
       }
       console.log(`  Loaded event: ${event.name} (once: ${!!event.once})`);
     } else {
-      console.warn(`  Event at ${filePath} is missing required "name" or "execute" property.`);
+      console.warn(
+        `  Event at ${filePath} is missing required "name" or "execute" property.`
+      );
     }
   } catch (error) {
     console.error(`  Failed to load event ${file}:`, error);
@@ -142,30 +157,39 @@ const rest = new REST().setToken(process.env.TOKEN!);
 (async () => {
   try {
     console.log('Started refreshing application (/) commands...');
-    const data = (await rest.put(Routes.applicationCommands(process.env.CLIENT_ID!), { body: commands })) as any[];
-    console.log(`Successfully reloaded ${data.length} application (/) commands.`);
+    const data = (await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID!),
+      { body: commands }
+    )) as any[];
+    console.log(
+      `Successfully reloaded ${data.length} application (/) commands.`
+    );
   } catch (error) {
     console.error('Failed to deploy commands:', error);
   }
 })();
 
 // Simple rate limit monitoring
-client.rest.on('rateLimited', (rateLimitInfo) => {
+client.rest.on('rateLimited', rateLimitInfo => {
   console.warn('Rate limit hit:', {
     timeToReset: rateLimitInfo.timeToReset,
     method: rateLimitInfo.method,
     route: rateLimitInfo.route,
-    global: rateLimitInfo.global
+    global: rateLimitInfo.global,
   });
 });
 
 // Monitor invalid requests
-client.on('invalidRequestWarning', (data) => {
-  console.warn(`Invalid requests: ${data.count}/10000 (${data.remainingTime}ms remaining)`);
+client.on('invalidRequestWarning', data => {
+  console.warn(
+    `Invalid requests: ${data.count}/10000 (${data.remainingTime}ms remaining)`
+  );
 
   // Only log when approaching the limit
   if (data.count > 8000) {
-    console.error(`⚠️  Approaching invalid request limit! Count: ${data.count}/10000`);
+    console.error(
+      `⚠️  Approaching invalid request limit! Count: ${data.count}/10000`
+    );
     console.error('Check for permission errors or malformed requests');
   }
 });

@@ -2,6 +2,7 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   EmbedBuilder,
+  MessageFlags,
 } from 'discord.js';
 import { CustomClient } from '../types';
 
@@ -16,12 +17,12 @@ export async function execute(
   if (interaction.user.id !== process.env.OWNER_ID) {
     await interaction.reply({
       content: '❌ This command is only available to the bot owner.',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
     const guildConfig = client.guildConfigs.get(interaction.guildId!);
@@ -46,10 +47,10 @@ export async function execute(
 
       guildList.push(
         `**${guildName}** (${memberCount} members)\n` +
-        `   └ ID: \`${guildId}\`\n` +
-        `   └ Servers: ${config.servers.length}\n` +
-        `   └ Status: ${config.interval?.enabled ? '🟢 Monitoring' : '⚪ Inactive'}\n` +
-        `   └ Owner: ${guild?.ownerId ? `<@${guild.ownerId}>` : 'Unknown'}`
+          `   └ ID: \`${guildId}\`\n` +
+          `   └ Servers: ${config.servers.length}\n` +
+          `   └ Status: ${config.interval?.enabled ? '🟢 Monitoring' : '⚪ Inactive'}\n` +
+          `   └ Owner: ${guild?.ownerId ? `<@${guild.ownerId}>` : 'Unknown'}`
       );
     }
 
@@ -59,56 +60,56 @@ export async function execute(
       .setDescription(`Debug info for ${client.user?.tag}`)
       .setTimestamp();
 
-    embed.addFields(
-      {
-        name: '📊 Global Statistics',
-        value:
-          `**Total Guilds:** ${totalGuilds}\n` +
-          `**Total Servers:** ${totalServers}\n` +
-          `**Active Monitoring:** ${activeMonitoring} guilds\n` +
-          `**Bot Uptime:** <t:${Math.floor((Date.now() - (process.uptime() * 1000)) / 1000)}:R>\n` +
-          `**Memory Usage:** ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB\n` +
-          `**Node.js Version:** ${process.version}\n` +
-          `**Environment:** ${process.env.NODE_ENV || 'development'}`,
-        inline: false,
-      }
-    );
+    embed.addFields({
+      name: '📊 Global Statistics',
+      value:
+        `**Total Guilds:** ${totalGuilds}\n` +
+        `**Total Servers:** ${totalServers}\n` +
+        `**Active Monitoring:** ${activeMonitoring} guilds\n` +
+        `**Bot Uptime:** <t:${Math.floor((Date.now() - process.uptime() * 1000) / 1000)}:R>\n` +
+        `**Memory Usage:** ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB\n` +
+        `**Node.js Version:** ${process.version}\n` +
+        `**Environment:** ${process.env.NODE_ENV || 'development'}`,
+      inline: false,
+    });
 
     if (interaction.guildId) {
       const activeServer = interval?.activeServerId
         ? servers.find(s => s.id === interval.activeServerId)
         : null;
 
-      embed.addFields(
-        {
-          name: '🏠 Current Guild Information',
-          value:
-            `**Guild:** ${interaction.guild?.name}\n` +
-            `**Guild ID:** \`${interaction.guildId}\`\n` +
-            `**Members:** ${interaction.guild?.memberCount || 0}\n` +
-            `**Owner:** <@${interaction.guild?.ownerId}>\n` +
-            `**Servers Configured:** ${servers.length}\n` +
-            `**Monitoring:** ${interval?.enabled ? '✅ Enabled' : '❌ Disabled'}\n` +
-            `**Active Server:** ${activeServer?.name || 'None'}\n` +
-            `**Next Update:** ${interval?.next ? `<t:${Math.floor(interval.next / 1000)}:R>` : 'N/A'}`,
-          inline: false,
-        }
-      );
+      embed.addFields({
+        name: '🏠 Current Guild Information',
+        value:
+          `**Guild:** ${interaction.guild?.name}\n` +
+          `**Guild ID:** \`${interaction.guildId}\`\n` +
+          `**Members:** ${interaction.guild?.memberCount || 0}\n` +
+          `**Owner:** <@${interaction.guild?.ownerId}>\n` +
+          `**Servers Configured:** ${servers.length}\n` +
+          `**Monitoring:** ${interval?.enabled ? '✅ Enabled' : '❌ Disabled'}\n` +
+          `**Active Server:** ${activeServer?.name || 'None'}\n` +
+          `**Next Update:** ${interval?.next ? `<t:${Math.floor(interval.next / 1000)}:R>` : 'N/A'}`,
+        inline: false,
+      });
 
       if (servers.length > 0) {
-        const serverList = servers.map((server) => {
-          const isActive = interval?.activeServerId === server.id;
-          const addedBy = client.users.cache.get(server.addedBy);
-          return `${isActive ? '🟢' : '⚪'} **${server.name}** (\`${server.id}\`)\n` +
-            `   └ Address: \`${server.ip}:${server.port}\`\n` +
-            `   └ Added: <t:${Math.floor(server.addedAt / 1000)}:R>\n` +
-            `   └ By: ${addedBy?.tag || `Unknown (${server.addedBy})`}`;
-        }).join('\n\n');
+        const serverList = servers
+          .map(server => {
+            const isActive = interval?.activeServerId === server.id;
+            const addedBy = client.users.cache.get(server.addedBy);
+            return (
+              `${isActive ? '🟢' : '⚪'} **${server.name}** (\`${server.id}\`)\n` +
+              `   └ Address: \`${server.ip}:${server.port}\`\n` +
+              `   └ Added: <t:${Math.floor(server.addedAt / 1000)}:R>\n` +
+              `   └ By: ${addedBy?.tag || `Unknown (${server.addedBy})`}`
+            );
+          })
+          .join('\n\n');
 
         if (serverList.length > 1024) {
           const chunks = [];
           let currentChunk = '';
-          const serverEntries = servers.map((server) => {
+          const serverEntries = servers.map(server => {
             const isActive = interval?.activeServerId === server.id;
             return `${isActive ? '🟢' : '⚪'} **${server.name}** (\`${server.ip}:${server.port}\`)`;
           });
@@ -125,7 +126,10 @@ export async function execute(
 
           chunks.forEach((chunk, index) => {
             embed.addFields({
-              name: index === 0 ? '🖥️ Configured Servers' : `🖥️ Servers (continued ${index + 1})`,
+              name:
+                index === 0
+                  ? '🖥️ Configured Servers'
+                  : `🖥️ Servers (continued ${index + 1})`,
               value: chunk,
               inline: false,
             });
@@ -144,22 +148,32 @@ export async function execute(
 
         if (interval.statusChannel) {
           const channel = client.channels.cache.get(interval.statusChannel);
-          channels.push(`**Status:** ${channel ? `<#${interval.statusChannel}>` : '❌ Missing'} (\`${interval.statusChannel}\`)`);
+          channels.push(
+            `**Status:** ${channel ? `<#${interval.statusChannel}>` : '❌ Missing'} (\`${interval.statusChannel}\`)`
+          );
         }
 
         if (interval.chartChannel) {
           const channel = client.channels.cache.get(interval.chartChannel);
-          channels.push(`**Charts:** ${channel ? `<#${interval.chartChannel}>` : '❌ Missing'} (\`${interval.chartChannel}\`)`);
+          channels.push(
+            `**Charts:** ${channel ? `<#${interval.chartChannel}>` : '❌ Missing'} (\`${interval.chartChannel}\`)`
+          );
         }
 
         if (interval.playerCountChannel) {
-          const channel = client.channels.cache.get(interval.playerCountChannel);
-          channels.push(`**Player Count:** ${channel ? `<#${interval.playerCountChannel}>` : '❌ Missing'} (\`${interval.playerCountChannel}\`)`);
+          const channel = client.channels.cache.get(
+            interval.playerCountChannel
+          );
+          channels.push(
+            `**Player Count:** ${channel ? `<#${interval.playerCountChannel}>` : '❌ Missing'} (\`${interval.playerCountChannel}\`)`
+          );
         }
 
         if (interval.serverIpChannel) {
           const channel = client.channels.cache.get(interval.serverIpChannel);
-          channels.push(`**Server IP:** ${channel ? `<#${interval.serverIpChannel}>` : '❌ Missing'} (\`${interval.serverIpChannel}\`)`);
+          channels.push(
+            `**Server IP:** ${channel ? `<#${interval.serverIpChannel}>` : '❌ Missing'} (\`${interval.serverIpChannel}\`)`
+          );
         }
 
         if (channels.length > 0) {
@@ -171,7 +185,9 @@ export async function execute(
         }
 
         if (interval.managementRoleId) {
-          const role = interaction.guild?.roles.cache.get(interval.managementRoleId);
+          const role = interaction.guild?.roles.cache.get(
+            interval.managementRoleId
+          );
           embed.addFields({
             name: '👥 Management Role',
             value: `${role ? role.toString() : '❌ Missing'} (\`${interval.managementRoleId}\`)`,
@@ -213,8 +229,9 @@ export async function execute(
       if (activeIPs > 0) {
         const summary = Object.entries(rateLimitStats)
           .slice(0, 5) // Show only first 5 IPs to avoid embed limits
-          .map(([ip, stats]: [string, any]) =>
-            `**${ip}**: ${stats.queriesInLastHour} queries/hour, ${stats.totalGuilds} guilds`
+          .map(
+            ([ip, stats]: [string, any]) =>
+              `**${ip}**: ${stats.queriesInLastHour} queries/hour, ${stats.totalGuilds} guilds`
           )
           .join('\n');
 
@@ -248,7 +265,10 @@ export async function execute(
         for (const guildInfo of guildList) {
           if (currentField.length + guildInfo.length > 1020) {
             embed.addFields({
-              name: fieldIndex === 1 ? '🌐 All Guilds Overview' : `🌐 Guilds (continued ${fieldIndex})`,
+              name:
+                fieldIndex === 1
+                  ? '🌐 All Guilds Overview'
+                  : `🌐 Guilds (continued ${fieldIndex})`,
               value: currentField,
               inline: false,
             });
@@ -261,7 +281,10 @@ export async function execute(
 
         if (currentField) {
           embed.addFields({
-            name: fieldIndex === 1 ? '🌐 All Guilds Overview' : `🌐 Guilds (continued ${fieldIndex})`,
+            name:
+              fieldIndex === 1
+                ? '🌐 All Guilds Overview'
+                : `🌐 Guilds (continued ${fieldIndex})`,
             value: currentField,
             inline: false,
           });
@@ -310,7 +333,7 @@ export async function execute(
     }
 
     const footerOptions: { text: string; iconURL?: string } = {
-      text: `Owner Debug Panel • Process ID: ${process.pid} • Discord.js v${require('discord.js').version}`
+      text: `Owner Debug Panel • Process ID: ${process.pid} • Discord.js v${require('discord.js').version}`,
     };
 
     const botAvatarURL = client.user?.displayAvatarURL();
