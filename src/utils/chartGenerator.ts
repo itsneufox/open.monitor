@@ -9,6 +9,11 @@ const chartJSNodeCanvas = new ChartJSNodeCanvas({
     chartCallback: (ChartJS) => {
         ChartJS.defaults.responsive = false;
         ChartJS.defaults.maintainAspectRatio = false;
+
+        ChartJS.defaults.font = {
+            family: 'Arial, sans-serif',
+            size: 12
+        };
     },
 });
 
@@ -16,22 +21,26 @@ export async function generateChart(
     data: ChartData,
     color: number
 ): Promise<AttachmentBuilder> {
-    if (!data.days || data.days.length === 0) {
+    const chartData = (data as any).value ? (data as any).value : data;
+
+    if (!chartData.days || chartData.days.length === 0) {
         throw new Error('No chart data available');
     }
 
-    const labels = data.days.map(day => {
+    const sortedDays = chartData.days.sort((a: any, b: any) => a.date - b.date);
+
+    const labels = sortedDays.map((day: any) => {
         const date = new Date(day.date);
         return date.getDate().toString();
     });
 
-    const values = data.days.map(day => Math.max(0, day.value));
+    const values = sortedDays.map((day: any) => Math.max(0, day.value));
     const hexColor = `#${color.toString(16).padStart(6, '0')}`;
     const maxValue = Math.max(...values);
     const yAxisMax = Math.max(Math.ceil(maxValue * 1.15), 10);
 
-    const firstDate = new Date(data.days[0]?.date || Date.now());
-    const lastDate = new Date(data.days[data.days.length - 1]?.date || Date.now());
+    const firstDate = new Date(sortedDays[0]?.date || Date.now());
+    const lastDate = new Date(sortedDays[sortedDays.length - 1]?.date || Date.now());
 
     let titleText = '';
     if (firstDate.getMonth() === lastDate.getMonth() && firstDate.getFullYear() === lastDate.getFullYear()) {
@@ -95,6 +104,7 @@ export async function generateChart(
                     font: {
                         size: 20,
                         weight: 'bold' as const,
+                        family: 'Arial, sans-serif'
                     },
                     padding: {
                         top: 10,
@@ -108,6 +118,7 @@ export async function generateChart(
                         color: '#FFFFFF',
                         font: {
                             size: 14,
+                            family: 'Arial, sans-serif'
                         },
                         usePointStyle: true,
                         padding: 20,
@@ -121,11 +132,17 @@ export async function generateChart(
                     borderWidth: 2,
                     cornerRadius: 8,
                     displayColors: false,
+                    titleFont: {
+                        family: 'Arial, sans-serif'
+                    },
+                    bodyFont: {
+                        family: 'Arial, sans-serif'
+                    },
                     callbacks: {
                         title: function (context: any[]) {
                             const item = context[0];
                             const dataIndex = item.dataIndex;
-                            const fullDate = new Date(data.days[dataIndex]?.date || Date.now());
+                            const fullDate = new Date(sortedDays[dataIndex]?.date || Date.now());
                             const fullDateStr = fullDate.toLocaleDateString('en-US', {
                                 weekday: 'long',
                                 year: 'numeric',
@@ -150,12 +167,14 @@ export async function generateChart(
                         font: {
                             size: 14,
                             weight: 'bold' as const,
+                            family: 'Arial, sans-serif'
                         },
                     },
                     ticks: {
                         color: '#CCCCCC',
                         font: {
                             size: 12,
+                            family: 'Arial, sans-serif'
                         },
                         maxRotation: 0,
                         minRotation: 0,
@@ -185,12 +204,14 @@ export async function generateChart(
                         font: {
                             size: 14,
                             weight: 'bold' as const,
+                            family: 'Arial, sans-serif'
                         },
                     },
                     ticks: {
                         color: '#CCCCCC',
                         font: {
                             size: 12,
+                            family: 'Arial, sans-serif'
                         },
                         precision: 0,
                         stepSize: Math.max(1, Math.ceil(yAxisMax / 10)),
