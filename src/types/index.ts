@@ -1,6 +1,7 @@
 import { Client, Collection } from 'discord.js';
 import Keyv from 'keyv';
 import { RateLimitManager } from '../utils/rateLimitManager';
+import { SupportedLocale } from '../localization';
 
 export interface ServerConfig {
   id: string;
@@ -55,8 +56,15 @@ export interface CustomClient extends Client {
   intervals: Keyv<IntervalConfig>;
   maxPlayers: Keyv<ChartData>;
   uptimes: Keyv<UptimeStats>;
+  guildSettings: Keyv<GuildSettings>;
   rateLimitManager: RateLimitManager;
   guildConfigs: Collection<string, GuildConfig>;
+}
+
+export interface GuildSettings {
+  locale: SupportedLocale;
+  timezone?: string;
+  dateFormat?: string;
 }
 
 export function toSimpleServer(server: ServerConfig): SimpleServer {

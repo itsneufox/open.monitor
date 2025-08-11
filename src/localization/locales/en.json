@@ -1,0 +1,103 @@
+{
+  "commands": {
+    "server": {
+      "add": {
+        "description": "Add a new SA:MP/open.mp server to monitor",
+        "testing": "Testing server connection...",
+        "success_title": "Server Added",
+        "success_description": "**{{name}}**\n{{address}}",
+        "status_online": "Online",
+        "status_offline": "Offline or unreachable",
+        "players": "Players",
+        "gamemode": "Gamemode",
+        "server_type": "Server Type",
+        "active_server": "Active Server",
+        "next_steps": "Next Steps",
+        "use_monitor_setup": "Use `/monitor setup` to configure monitoring channels",
+        "use_server_activate": "Use `/server activate` to switch monitoring to this server",
+        "security_info": "Security Info",
+        "security_details": "• Server validated and added to monitoring\n• Rate limits: 12 queries/hour, 3 Discord servers max\n• All queries are validated for security",
+        "error_rate_limit": "Rate limit exceeded for this IP address. Please try again later.\n\n**Rate limits:**\n• Maximum 12 queries per hour per IP\n• Maximum 3 different Discord servers per IP\n• Minimum 30 seconds between queries",
+        "error_invalid_ip": "Invalid or blocked IP address. Please use a valid public IPv4 address.\n\n**Blocked ranges:**\n• Private networks (10.x.x.x, 192.168.x.x, 172.16-31.x.x)\n• Loopback (127.x.x.x) - only allowed in development\n• Invalid ranges (0.x.x.x, 169.254.x.x, 224.x.x.x, 255.x.x.x)",
+        "error_connection_timeout": "Connection timeout. The server may be offline or the address/port is incorrect.",
+        "error_connection_refused": "Connection refused. The server may be offline or not accepting connections on this port.",
+        "error_not_found": "Unable to resolve the server address. Please check the IP/domain name.",
+        "troubleshooting": "**Troubleshooting:**\n• Verify the server IP address and port\n• Ensure the server is online and accepting SA:MP queries\n• Check if the server has query enabled\n• Try again in a few moments"
+      },
+      "list": {
+        "description": "Show all configured servers for this guild",
+        "title": "Configured Servers",
+        "description_text": "Found {{count}} server{{plural}}",
+        "no_servers_title": "No Servers Configured",
+        "no_servers_description": "No servers have been added to this guild yet.",
+        "getting_started": "Getting Started",
+        "use_server_add": "Use `/server add` to add your first server!",
+        "example": "Example",
+        "example_command": "`/server add ip:127.0.0.1 port:7777 name:My Server`",
+        "address": "Address",
+        "added": "Added",
+        "status_active": "Active (Monitoring)",
+        "status_inactive": "Inactive",
+        "footer_monitoring": "Currently monitoring: {{serverName}}",
+        "footer_no_active": "No active server set - use /server activate to choose one"
+      },
+      "activate": {
+        "description": "Set which server to actively monitor",
+        "success_title": "Server Activated",
+        "success_description": "**{{name}}** is now the active server",
+        "server_address": "Server Address",
+        "monitoring": "Monitoring",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "next_steps_enabled": "Server monitoring is active!",
+        "next_steps_disabled": "Use `/monitor setup` to configure monitoring"
+      },
+      "remove": {
+        "description": "Remove a server and all its data",
+        "cancelled": "Server deletion cancelled. Set confirm to `true` to proceed.",
+        "success_title": "Server Removed Successfully",
+        "success_description": "Removed **{{name}}** and cleaned up all associated data",
+        "added_date": "Added Date",
+        "added_by": "Added By",
+        "data_cleaned": "Data Cleaned",
+        "chart_data_removed": "{{count}} days of chart data removed",
+        "peak_today": "Peak Today",
+        "peak_deleted": "{{count}} players (deleted)",
+        "uptime_data_cleaned": "Uptime Data Cleaned",
+        "uptime_removed": "{{percentage}}% uptime data ({{uptime}}/{{total}} checks) removed",
+        "monitoring_disabled": "Disabled (no servers remaining)",
+        "monitoring_switched": "Switched to **{{serverName}}**",
+        "monitoring_continues": "Continues with existing active server",
+        "active_server_now": "Now monitoring: {{name}} ({{address}})",
+        "remaining_servers": "{{count}} server{{plural}} still configured",
+        "database_cleanup": "Database Cleanup",
+        "cleanup_details": "• Chart data removed from database\n• Uptime statistics removed\n• All associated data cleaned up\n• No orphaned data left behind"
+      },
+      "status": {
+        "description": "Show current server status and information",
+        "title": "Server Status",
+        "omp_title": "open.mp Server Status",
+        "samp_title": "SA:MP Server Status",
+        "password": "Password",
+        "yes": "Yes",
+        "no": "No",
+        "unknown": "Unknown",
+        "version": "Version",
+        "language": "Language",
+        "error_querying": "Error querying server",
+        "fresh_requested": "Fresh data requested",
+        "cached_data": "Cached data (use fresh:true for live data)",
+        "last_updated": "Last updated",
+        "rate_limit_warning": "Fresh status requests are limited to prevent rate limits. Please wait {{seconds}} seconds.\n\n💡 **Tip:** Regular status checks (without `fresh: true`) are unlimited and show recent data."
+      }
+    },
+    "common": {
+      "no_servers": "No servers configured. Use `/server add` to add a server first.",
+      "server_not_found": "Server not found. Use `/server list` to see available servers.",
+      "no_active_server": "No active server set and multiple servers available. Use `/server activate` to set an active server, or specify which server to check.",
+      "permission_denied": "Insufficient Permissions",
+      "error": "Error",
+      "an_error_occurred": "An error occurred while {{action}}. Please try again."
+    }
+  }
+}

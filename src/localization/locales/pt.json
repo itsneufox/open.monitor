@@ -1,0 +1,29 @@
+{
+  "commands": {
+    "server": {
+      "add": {
+        "description": "Adicionar um novo servidor SA:MP/open.mp para monitorar",
+        "testing": "Testando conexão do servidor...",
+        "success_title": "Servidor Adicionado",
+        "success_description": "**{{name}}**\n{{address}}",
+        "status_online": "Online",
+        "status_offline": "Offline ou inacessível",
+        "players": "Jogadores",
+        "gamemode": "Modo de Jogo",
+        "server_type": "Tipo de Servidor",
+        "active_server": "Servidor Ativo",
+        "next_steps": "Próximos Passos",
+        "use_monitor_setup": "Use `/monitor setup` para configurar canais de monitoramento",
+        "use_server_activate": "Use `/server activate` para alternar o monitoramento para este servidor",
+        "security_info": "Informações de Segurança",
+        "security_details": "• Servidor validado e adicionado ao monitoramento\n• Limites de taxa: 12 consultas/hora, máx 3 servidores Discord\n• Todas as consultas são validadas por segurança",
+        "error_rate_limit": "Limite de taxa excedido para este endereço IP. Tente novamente mais tarde.\n\n**Limites de taxa:**\n• Máximo de 12 consultas por hora por IP\n• Máximo de 3 servidores Discord diferentes por IP\n• Mínimo de 30 segundos entre consultas",
+        "error_invalid_ip": "Endereço IP inválido ou bloqueado. Use um endereço IPv4 público válido.\n\n**Faixas bloqueadas:**\n• Redes privadas (10.x.x.x, 192.168.x.x, 172.16-31.x.x)\n• Loopback (127.x.x.x) - permitido apenas em desenvolvimento\n• Faixas inválidas (0.x.x.x, 169.254.x.x, 224.x.x.x, 255.x.x.x)",
+        "error_connection_timeout": "Timeout de conexão. O servidor pode estar offline ou o endereço/porta está incorreto.",
+        "error_connection_refused": "Conexão recusada. O servidor pode estar offline ou não aceitar conexões nesta porta.",
+        "error_not_found": "Não foi possível resolver o endereço do servidor. Verifique o IP/nome do domínio.",
+        "troubleshooting": "**Solução de problemas:**\n• Verifique o endereço IP e porta do servidor\n• Certifique-se de que o servidor está online e aceita consultas SA:MP\n• Verifique se o servidor tem query habilitado\n• Tente novamente em alguns momentos"
+      }
+    }
+  }
+}
