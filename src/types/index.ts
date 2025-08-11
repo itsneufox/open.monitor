@@ -26,6 +26,8 @@ export interface IntervalConfig {
   next: number;
   statusMessage: string | null;
   managementRoleId?: string;
+  dataLossNotificationSent?: boolean;
+  preferredLanguage?: 'en' | 'pt' | 'es';
 }
 
 export interface ChartData {
