@@ -23,12 +23,34 @@ export async function generateChart(
 ): Promise<AttachmentBuilder> {
     const chartData = (data as any).value ? (data as any).value : data;
 
+    console.log('📊 Chart Debug Info:', {
+        hasValue: !!(data as any).value,
+        originalDataKeys: Object.keys(data),
+        chartDataKeys: Object.keys(chartData),
+        daysLength: chartData.days?.length,
+        firstFewDays: chartData.days?.slice(0, 3),
+        serverName: chartData.name
+    });
+
     if (!chartData.days || chartData.days.length === 0) {
         throw new Error('No chart data available');
     }
 
     const sortedDays = chartData.days.sort((a: any, b: any) => a.date - b.date);
 
+    console.log('📊 Processed Chart Data:', {
+        sortedDaysCount: sortedDays.length,
+        dateRange: {
+            first: new Date(sortedDays[0]?.date),
+            last: new Date(sortedDays[sortedDays.length - 1]?.date)
+        },
+        valueRange: {
+            min: Math.min(...sortedDays.map((d: any) => d.value)),
+            max: Math.max(...sortedDays.map((d: any) => d.value))
+        },
+        sampleValues: sortedDays.slice(0, 5).map((d: any) => ({ value: d.value, date: new Date(d.date) }))
+    });
+    
     const labels = sortedDays.map((day: any) => {
         const date = new Date(day.date);
         return date.getDate().toString();
