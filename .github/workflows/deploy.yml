@@ -1,7 +1,7 @@
 name: 🚀 open.monitor deploy
 on:
   schedule:
-    - cron: '0 3 * * *'  # Daily at 3 AM UTC
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 jobs:
@@ -11,6 +11,9 @@ jobs:
     steps:
     - name: 📡 Mission Control - Downloading Flight Plans
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
       
     - name: 🔧 Pre-Flight Systems Check
       run: |
@@ -28,8 +31,38 @@ jobs:
           exit 1
         fi
         echo "✅ All systems green! Rocket fuel loaded! 🚀⛽"
+
+    - name: 🛰️ Spacecraft Version Control System
+      run: |
+        echo "🌌 Galactic Registry - Assigning new spacecraft serial number..."
         
-    - name: 🛡️ Loading Classified Mission Parameters
+        # Configure git for the space mission
+        git config --local user.email "mission-control@open-monitor.space"
+        git config --local user.name "🛰️ Mission Control"
+        
+        # Get current version and bump it
+        CURRENT_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "1.0.0")
+        echo "📊 Current spacecraft model: v$CURRENT_VERSION"
+        
+        # Auto-bump patch version for scheduled space missions
+        npm version patch --no-git-tag-version
+        NEW_VERSION=$(node -p "require('./package.json').version")
+        
+        echo "🆕 NEW_VERSION=v$NEW_VERSION" >> $GITHUB_ENV
+        echo "🚀 Upgraded spacecraft to model: v$NEW_VERSION"
+        
+        # Create git tag for the space mission
+        git add package.json package-lock.json
+        git commit -m "🚀 Launch v$NEW_VERSION - Daily orbital deployment [skip ci]"
+        git tag -a "v$NEW_VERSION" -m "🛰️ Space Mission v$NEW_VERSION - Daily auto-deployment"
+        
+        # Push to the cosmic repository
+        git push origin main
+        git push origin "v$NEW_VERSION"
+        
+        echo "🌟 Spacecraft v$NEW_VERSION registered in Galactic Database!"
+
+    - name: 🛡️ Loading Classified Mission Parameters  
       run: |
         echo "🔒 Mission Control uploading top-secret coordinates..."
         cat > .env << EOF
@@ -39,21 +72,41 @@ jobs:
         OWNER_ID=${{ secrets.OWNER_ID }}
         NODE_ENV=production
         LOG_LEVEL=production
-      
+        
+        # Mission Version (for space tracking)
+        BOT_VERSION=${NEW_VERSION:-latest}
+        
         # MySQL Configuration
         MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
         MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+        
+        # Valkey Configuration
+        VALKEY_HOSTS=valkey:6379
+        VALKEY_USE_TLS=false
+        VALKEY_KEY_EXPIRY_SECONDS=540
         EOF
         echo "✅ Navigation computer programmed! Coordinates locked! 🎯"
+
+    - name: 📋 Mission Briefing - Spacecraft Specifications
+      run: |
+        SPACECRAFT_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
+        echo "🛰️ =================================="
+        echo "🚀 DAILY SPACECRAFT MISSION BRIEFING"
+        echo "🛰️ =================================="
+        echo "📦 Spacecraft Model: open.monitor v$SPACECRAFT_VERSION"
+        echo "🏷️ Mission Tag: ${NEW_VERSION:-current-deployment}"
+        echo "👨‍🚀 Pilot: Automated Mission Control"
+        echo "🌍 Launch Facility: $(pwd)"
+        echo "📡 Mission Control: ${{ github.repository }}"
+        echo "🔢 Flight Serial: ${{ github.sha }}"
+        echo "📻 Authorization: ${{ github.event_name }}"
+        echo "⏰ Launch Time: $(date -u)"
+        echo "🕐 Next Launch: Tomorrow 03:00 UTC"
+        echo "🛰️ =================================="
       
     - name: 🚀 T-Minus Zero - open.monitor Launch Sequence
       run: |
-        echo "🎮 Houston, we are GO for open.monitor launch!"
-        echo "👨‍🚀 Flight Commander: $(whoami)"
-        echo "🏢 Mission Control: $(pwd)"
-        echo "📋 Mission Codename: ${{ github.repository }}"
-        echo "🔢 Flight Number: ${{ github.sha }}"
-        echo "📻 Launch Authorization: ${{ github.event_name }}"
+        echo "🎮 Houston, we are GO for DAILY open.monitor launch!"
         
         echo "💥 Decommissioning old satellites... Controlled detonation in progress!"
         sudo docker-compose -f /opt/open.monitor/docker-compose.yml down --timeout 30 || true
@@ -95,7 +148,9 @@ jobs:
         sleep 15
       
         if [ "$(sudo docker ps -q -f name=openmonitor-bot -f status=running)" ]; then
+          SPACECRAFT_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
           echo "🛸 WE HAVE SUCCESSFUL ORBITAL INSERTION! 🎊"
+          echo "🌟 Spacecraft open.monitor v$SPACECRAFT_VERSION is now in stable orbit!"
           echo "📡 Satellite constellation status:"
           sudo docker ps --filter name=openmonitor
           echo "📢 First transmission from space:"
@@ -115,3 +170,17 @@ jobs:
         echo "🌟 MISSION SUCCESS! open.monitor is now in stable orbit!"
         echo "🪐 Your SA:MP/open.mp servers are under cosmic surveillance! 👽"
         echo "🌌 May the servers be with you, Commander! 🫡"
+
+    - name: 🌌 Daily Galactic Mission Report
+      run: |
+        SPACECRAFT_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
+        echo "📊 =================================="
+        echo "🛰️ DAILY MISSION ACCOMPLISHED!"
+        echo "📊 =================================="
+        echo "🚀 Spacecraft: open.monitor v$SPACECRAFT_VERSION"
+        echo "🏷️ Mission Tag: ${NEW_VERSION}"
+        echo "⏰ Mission Time: $(date -u)"
+        echo "📡 Status: ✅ ORBITAL AND OPERATIONAL"
+        echo "🕐 Next Launch: Tomorrow at 03:00 UTC"
+        echo "🌟 Status: Awaiting next automated mission"
+        echo "📊 =================================="
