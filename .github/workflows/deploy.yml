@@ -1,99 +1,116 @@
-name: Deploy to CT 109
+name: 🚀 open.monitor deploy
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+schedule:
+  - cron: '0 3 * * *'  # Daily at 3 AM UTC
+workflow_dispatch:
 jobs:
-  deploy:
-    runs-on: self-hosted
-   
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+deploy:
+  runs-on: self-hosted
 
-    - name: Install build dependencies for node-gyp / canvas
-      run: |
-        if command -v apk >/dev/null 2>&1; then
-          echo "Detected Alpine Linux runner"
-          sudo apk add --no-cache python3 make g++ pkgconfig cairo-dev pango-dev giflib-dev
-          sudo ln -sf python3 /usr/bin/python
-        elif command -v apt-get >/dev/null 2>&1; then
-          echo "Detected Debian/Ubuntu runner"
-          sudo apt-get update
-          sudo apt-get install -y python3 make g++ pkg-config libcairo2-dev libpango1.0-dev libgif-dev
-          sudo ln -sf python3 /usr/bin/python
-        else
-          echo "Unknown OS. Please install build dependencies manually."
-          exit 1
-        fi
-
-    - name: Create/Update environment file
-      run: |
-        echo "Creating/updating .env file..."
-        cat > .env << EOF
-        TOKEN=${{ secrets.DISCORD_TOKEN }}
-        CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
-        DATABASE_URL=${{ secrets.DATABASE_URL }}
-        OWNER_ID=${{ secrets.OWNER_ID }}
-        NODE_ENV=production
-        LOG_LEVEL=production
-       
-        # MySQL Configuration
-        MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
-        MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
-        EOF
-        echo ".env file created/updated successfully"
-        echo "Environment variables set (values hidden for security)"
-       
-    - name: Deploy Bot
-      run: |
-        echo "Starting deployment..."
-        echo "User: $(whoami)"
-        echo "Working directory: $(pwd)"
-        echo "Repository: ${{ github.repository }}"
-        echo "Commit: ${{ github.sha }}"
-
-        echo "Stopping existing containers..."
-        sudo docker-compose -f /opt/open.monitor/docker-compose.yml down --timeout 30 || true
-       
-        echo "Cleaning deployment directory..."
-        sudo rm -rf /opt/open.monitor/*
-        sudo mkdir -p /opt/open.monitor
-       
-        echo "Copying files to /opt/open.monitor..."
-        sudo cp -r * /opt/open.monitor/
-        sudo chown -R github-runner:github-runner /opt/open.monitor
-       
-        cd /opt/open.monitor
-       
-        echo "Cleaning up old images..."
-        sudo docker image prune -f
-       
-        echo "Building new containers..."
-        sudo docker-compose build --no-cache
-       
-        echo "Starting containers..."
-        sudo docker-compose up -d
-       
-        echo "Waiting for services to start..."
-        sleep 15
-       
-        if [ "$(sudo docker ps -q -f name=openmonitor-bot -f status=running)" ]; then
-          echo "Deployment successful!"
-          echo "Container status:"
-          sudo docker ps --filter name=openmonitor
-          echo "Recent bot logs:"
-          sudo docker logs openmonitor-bot --tail 10
-        else
-          echo "Deployment failed!"
-          echo "Checking all containers:"
-          sudo docker ps -a
-          echo "Bot logs:"
-          sudo docker logs openmonitor-bot --tail 20 || echo "Could not get bot logs"
-          exit 1
-        fi
-       
-        echo "Cleaning up unused resources..."
-        sudo docker system prune -f
-       
-        echo "Deployment completed successfully!"
+  steps:
+  - name: 📡 Mission Control - Downloading Flight Plans
+    uses: actions/checkout@v4
+    
+  - name: 🔧 Pre-Flight Systems Check
+    run: |
+      if command -v apk >/dev/null 2>&1; then
+        echo "🛰️ Alpine launch pad detected - Installing rocket fuel..."
+        sudo apk add --no-cache python3 make g++ pkgconfig cairo-dev pango-dev giflib-dev
+        sudo ln -sf python3 /usr/bin/python
+      elif command -v apt-get >/dev/null 2>&1; then
+        echo "🛰️ Ubuntu/Debian launch facility confirmed - Fueling systems..."
+        sudo apt-get update
+        sudo apt-get install -y python3 make g++ pkg-config libcairo2-dev libpango1.0-dev libgif-dev
+        sudo ln -sf python3 /usr/bin/python
+      else
+        echo "🚨 ABORT! Unknown launch platform detected!"
+        exit 1
+      fi
+      echo "✅ All systems green! Rocket fuel loaded! 🚀⛽"
+      
+  - name: 🛡️ Loading Classified Mission Parameters
+    run: |
+      echo "🔒 Mission Control uploading top-secret coordinates..."
+      cat > .env << EOF
+      TOKEN=${{ secrets.DISCORD_TOKEN }}
+      CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
+      DATABASE_URL=${{ secrets.DATABASE_URL }}
+      OWNER_ID=${{ secrets.OWNER_ID }}
+      NODE_ENV=production
+      LOG_LEVEL=production
+    
+      # MySQL Configuration
+      MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
+      MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+      EOF
+      echo "✅ Navigation computer programmed! Coordinates locked! 🎯"
+    
+  - name: 🚀 T-Minus Zero - open.monitor Launch Sequence
+    run: |
+      echo "🎮 Houston, we are GO for open.monitor launch!"
+      echo "👨‍🚀 Flight Commander: $(whoami)"
+      echo "🏢 Mission Control: $(pwd)"
+      echo "📋 Mission Codename: ${{ github.repository }}"
+      echo "🔢 Flight Number: ${{ github.sha }}"
+      echo "📻 Launch Authorization: ${{ github.event_name }}"
+      
+      echo "💥 Decommissioning old satellites... Controlled detonation in progress!"
+      sudo docker-compose -f /opt/open.monitor/docker-compose.yml down --timeout 30 || true
+    
+      echo "🧹 Clearing launch pad debris... All clear for takeoff!"
+      sudo rm -rf /opt/open.monitor/*
+      sudo mkdir -p /opt/open.monitor
+    
+      echo "📦 Loading cargo bay with mission payload..."
+      sudo cp -r * /opt/open.monitor/
+      sudo chown -R github-runner:github-runner /opt/open.monitor
+    
+      cd /opt/open.monitor
+    
+      echo "🗑️ Jettisoning space junk... Houston, we have clean orbit!"
+      sudo docker image prune -f
+    
+      echo "🏗️ Assembling rocket components... 3D printing in space!"
+      sudo docker-compose build --no-cache
+    
+      echo "🚀 Initiating launch sequence..."
+      echo ""
+      echo "T-10" && sleep 1
+      echo "T-9" && sleep 1
+      echo "T-8" && sleep 1
+      echo "T-7" && sleep 1
+      echo "T-6" && sleep 1
+      echo "T-5" && sleep 1
+      echo "T-4" && sleep 1
+      echo "T-3" && sleep 1
+      echo "T-2" && sleep 1
+      echo "T-1" && sleep 1
+      echo "🚀 LIFTOFF! WE HAVE LIFTOFF! 🌌"
+      echo ""
+      
+      sudo docker-compose up -d
+    
+      echo "⏳ Waiting for orbital insertion... open.monitor entering atmosphere..."
+      sleep 15
+    
+      if [ "$(sudo docker ps -q -f name=openmonitor-bot -f status=running)" ]; then
+        echo "🛸 WE HAVE SUCCESSFUL ORBITAL INSERTION! 🎊"
+        echo "📡 Satellite constellation status:"
+        sudo docker ps --filter name=openmonitor
+        echo "📢 First transmission from space:"
+        sudo docker logs openmonitor-bot --tail 10
+      else
+        echo "🔥 MAYDAY! MAYDAY! Rocket explosion detected! 💥"
+        echo "🚨 Emergency protocols activated - checking debris field..."
+        sudo docker ps -a
+        echo "📻 Final transmission from the wreckage:"
+        sudo docker logs openmonitor-bot --tail 20 || echo "📡 Radio silence... we've lost contact 📻"
+        exit 1
+      fi
+    
+      echo "🛰️ Space cleanup crew removing orbital debris..."
+      sudo docker system prune -f
+    
+      echo "🌟 MISSION SUCCESS! open.monitor is now in stable orbit!"
+      echo "🪐 Your SA:MP/open.mp servers are under cosmic surveillance! 👽"
+      echo "🌌 May the servers be with you, Commander! 🫡"
