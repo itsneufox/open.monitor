@@ -26,7 +26,9 @@ services:
     container_name: openmonitor-valkey
     restart: unless-stopped
     volumes:
+      - ./conf/valkey.conf:/etc/valkey/valkey.conf
       - valkey_data:/data
+    command: ["valkey-server", "/etc/valkey/valkey.conf"]
     networks:
       - openmonitor-network
     healthcheck:
