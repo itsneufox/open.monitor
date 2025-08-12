@@ -24,32 +24,48 @@ export async function getStatus(
       return embed;
     }
 
-    // Definitive open.mp detection using 'o' opcode
     const isOpenMP = await sampQuery.isOpenMP(server, guildId, isMonitoring);
-    // Get server rules for additional version info
     const rules = await sampQuery.getServerRules(server, guildId, isMonitoring);
-    // Set title and version based on definitive detection
+
     let detectedVersion = 'Unknown';
+    let serverType = 'Unknown';
+
     if (isOpenMP) {
       statusTitle = 'open.mp Server Status';
-      detectedVersion = 'open.mp';
+      serverType = 'open.mp';
+
+      if (rules.version) {
+        if (rules.version.includes('omp ') || rules.version.includes('open.mp')) {
+          detectedVersion = rules.version;
+        } else {
+          detectedVersion = `open.mp ${rules.version}`;
+        }
+      } else if (rules.allowed_clients) {
+        detectedVersion = 'open.mp';
+      } else {
+        detectedVersion = 'open.mp';
+      }
     } else {
       statusTitle = 'SA:MP Server Status';
-      detectedVersion = 'SA:MP 0.3.7';
+      serverType = 'SA:MP';
 
-      // Try to get more specific SA:MP version from rules
-      if (rules.version && rules.version !== 'omp') {
-        detectedVersion = rules.version;
-      } else if (rules.Ver && rules.Ver !== 'omp') {
-        detectedVersion = rules.Ver;
-      } else if (rules.v && rules.v !== 'omp') {
-        detectedVersion = rules.v;
+      if (rules.version && !rules.version.includes('omp')) {
+        if (rules.version.includes('SA:MP') || rules.version.includes('0.3')) {
+          detectedVersion = rules.version;
+        } else {
+          detectedVersion = `SA:MP ${rules.version}`;
+        }
+      } else if (rules.Ver && !rules.Ver.includes('omp')) {
+        detectedVersion = rules.Ver.includes('SA:MP') ? rules.Ver : `SA:MP ${rules.Ver}`;
+      } else if (rules.v && !rules.v.includes('omp')) {
+        detectedVersion = rules.v.includes('SA:MP') ? rules.v : `SA:MP ${rules.v}`;
+      } else {
+        detectedVersion = 'SA:MP 0.3.7';
       }
     }
 
     embed.setTitle(statusTitle);
 
-    // Get open.mp extra info for banners and logos
     if (isOpenMP) {
       try {
         const extraInfo = await sampQuery.getOpenMPExtraInfo(
@@ -58,14 +74,12 @@ export async function getStatus(
           isMonitoring
         );
         if (extraInfo) {
-          // Set banner image (prefer dark banner, fallback to light banner)
           if (extraInfo.darkBanner) {
             embed.setImage(extraInfo.darkBanner);
           } else if (extraInfo.lightBanner) {
             embed.setImage(extraInfo.lightBanner);
           }
 
-          // Set logo as thumbnail
           if (extraInfo.logo) {
             embed.setThumbnail(extraInfo.logo);
           }
@@ -75,7 +89,6 @@ export async function getStatus(
       }
     }
 
-    // Clean description with server name and address
     embed.setDescription(
       `**${info.hostname}**\n\`${server.ip}:${server.port}\``
     );

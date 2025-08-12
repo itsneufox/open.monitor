@@ -1,8 +1,5 @@
 import { ServerConfig } from '../types';
 import { SAMPInfo, SAMPQuery } from './sampQuery';
-import { client as valkey } from './valkey';
-import { TimeUnit } from "@valkey/valkey-glide";
-
 
 interface PlayerCountResult {
   playerCount: number;
@@ -22,18 +19,23 @@ export async function getPlayerCount(
 ): Promise<PlayerCountResult> {
   try {
     if (!ignoreCache) {
-      let cachedInfo = await valkey.get(server.id);
-      if (cachedInfo) {
-        const info: SAMPInfo = (JSON.parse(cachedInfo as any)) as SAMPInfo;
-        if (info) {
-          return {
-            playerCount: info.players,
-            maxPlayers: info.maxplayers,
-            name: info.hostname,
-            isOnline: true,
-            isCached: true
-          };
+      try {
+        const { client: valkey } = await import('./valkey');
+        let cachedInfo = await valkey.get(server.id);
+        if (cachedInfo) {
+          const info: SAMPInfo = JSON.parse(cachedInfo as string);
+          if (info) {
+            return {
+              playerCount: info.players,
+              maxPlayers: info.maxplayers,
+              name: info.hostname,
+              isOnline: true,
+              isCached: true
+            };
+          }
         }
+      } catch (error) {
+        console.log('Cache unavailable, continuing without cache');
       }
     }
 
@@ -49,12 +51,19 @@ export async function getPlayerCount(
       };
     }
 
-    valkey.set(server.id, JSON.stringify(info), {
-      expiry: {
-        type: TimeUnit.Seconds,
-        count: Number(process.env.VALKEY_KEY_EXPIRY_SECONDS) || 60
-      },
-    });
+    try {
+      const { client: valkey } = await import('./valkey');
+      const { TimeUnit } = await import('@valkey/valkey-glide');
+      
+      await valkey.set(server.id, JSON.stringify(info), {
+        expiry: {
+          type: TimeUnit.Seconds,
+          count: Number(process.env.VALKEY_KEY_EXPIRY_SECONDS) || 60
+        },
+      });
+    } catch (error) {
+      console.log('Failed to cache data, continuing without cache');
+    }
 
     return {
       playerCount: info.players,

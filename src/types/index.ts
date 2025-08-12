@@ -28,6 +28,7 @@ export interface IntervalConfig {
   managementRoleId?: string;
   dataLossNotificationSent?: boolean;
   preferredLanguage?: 'en' | 'pt' | 'es';
+  lastVoiceUpdate?: number;
 }
 
 export interface ChartData {
