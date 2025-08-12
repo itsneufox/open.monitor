@@ -14,6 +14,12 @@ jobs:
       with:
         fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 🛰️ Installing Node.js Mission Control Software
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
       
     - name: 🔧 Pre-Flight Systems Check
       run: |
@@ -39,6 +45,9 @@ jobs:
         # Configure git for the space mission
         git config --local user.email "mission-control@open-monitor.space"
         git config --local user.name "🛰️ Mission Control"
+        
+        # Install dependencies for version detection
+        npm ci --silent
         
         # Get current version and bump it
         CURRENT_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "1.0.0")
