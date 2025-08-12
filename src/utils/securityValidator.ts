@@ -15,35 +15,46 @@ class SecurityValidator {
     return true;
   }
 
-  static canQueryIP(targetIP: string, guildId: string, isMonitoringCycle: boolean = false): boolean {
+  static canQueryIP(
+    targetIP: string,
+    guildId: string,
+    isMonitoringCycle: boolean = false
+  ): boolean {
     const data = this.ipQueryLimits.get(targetIP) ?? {
       lastHour: [],
       guilds: new Map(),
-      totalQueries: 0
+      totalQueries: 0,
     };
 
     const now = Date.now();
-    
+
     // Clean up old queries from last hour
     data.lastHour = data.lastHour.filter(time => time > now - 3600000);
-    
+
     // Get the last query time for this specific guild
     const lastGuildQuery = data.guilds.get(guildId) || 0;
-    
+
     // Different limits based on context
     const maxQueriesPerHour = 60;
     const maxGuilds = 10;
     const cooldownMs = isMonitoringCycle ? 15 : 10000; // 15ms for monitoring, 10s for manual
 
     // Check global limits
-    if (data.lastHour.length >= maxQueriesPerHour || data.guilds.size > maxGuilds) {
-      console.warn(`🚨 Global limit reached for ${targetIP}: queries=${data.lastHour.length}/${maxQueriesPerHour}, guilds=${data.guilds.size}/${maxGuilds}`);
+    if (
+      data.lastHour.length >= maxQueriesPerHour ||
+      data.guilds.size > maxGuilds
+    ) {
+      console.warn(
+        `🚨 Global limit reached for ${targetIP}: queries=${data.lastHour.length}/${maxQueriesPerHour}, guilds=${data.guilds.size}/${maxGuilds}`
+      );
       return false;
     }
 
     // Check per-guild cooldown
-    if ((now - lastGuildQuery) < cooldownMs) {
-      console.warn(`🚨 Guild cooldown active for ${targetIP} (guild: ${guildId}): lastQuery=${now - lastGuildQuery}ms ago (cooldown: ${cooldownMs}ms, monitoring: ${isMonitoringCycle})`);
+    if (now - lastGuildQuery < cooldownMs) {
+      console.warn(
+        `🚨 Guild cooldown active for ${targetIP} (guild: ${guildId}): lastQuery=${now - lastGuildQuery}ms ago (cooldown: ${cooldownMs}ms, monitoring: ${isMonitoringCycle})`
+      );
       return false;
     }
 
@@ -51,12 +62,16 @@ class SecurityValidator {
     data.lastHour.push(now);
     data.guilds.set(guildId, now);
     data.totalQueries++;
-    
+
     this.ipQueryLimits.set(targetIP, data);
     return true;
   }
 
-  static validateSAMPResponse(data: Buffer | undefined, server: ServerConfig, opcode: string): boolean {
+  static validateSAMPResponse(
+    data: Buffer | undefined,
+    server: ServerConfig,
+    opcode: string
+  ): boolean {
     if (!data || data.length < 11) {
       return false;
     }
@@ -83,13 +98,17 @@ class SecurityValidator {
     return responseOpcode === opcode;
   }
 
-  static validateStringField(data: Buffer | undefined, offset: number, maxLength = 256) {
+  static validateStringField(
+    data: Buffer | undefined,
+    offset: number,
+    maxLength = 256
+  ) {
     if (!data || offset + 4 > data.length) return { valid: false, length: 0 };
-    
+
     const length = data.readUInt32LE(offset);
     return {
       valid: length <= maxLength && offset + 4 + length <= data.length,
-      length
+      length,
     };
   }
 
@@ -107,10 +126,12 @@ class SecurityValidator {
         queriesInLastHour: data.lastHour.length,
         totalGuilds: data.guilds.size,
         totalQueries: data.totalQueries,
-        guilds: Array.from(data.guilds.entries()).map(([guildId, lastQuery]) => ({
-          guildId,
-          lastQuery: Date.now() - lastQuery + 'ms ago'
-        }))
+        guilds: Array.from(data.guilds.entries()).map(
+          ([guildId, lastQuery]) => ({
+            guildId,
+            lastQuery: Date.now() - lastQuery + 'ms ago',
+          })
+        ),
       };
     }
     return stats;
@@ -120,7 +141,7 @@ class SecurityValidator {
   static cleanupOldEntries(): void {
     const now = Date.now();
     const oneHourAgo = now - 3600000;
-    
+
     for (const [ip, data] of this.ipQueryLimits.entries()) {
       // Remove guilds that haven't queried in the last hour
       for (const [guildId, lastQuery] of data.guilds.entries()) {
@@ -128,14 +149,16 @@ class SecurityValidator {
           data.guilds.delete(guildId);
         }
       }
-      
+
       // Remove the entire IP entry if no recent activity
       if (data.lastHour.length === 0 && data.guilds.size === 0) {
         this.ipQueryLimits.delete(ip);
       }
     }
-    
-    console.log(`🧹 Rate limit cleanup completed. Active IPs: ${this.ipQueryLimits.size}`);
+
+    console.log(
+      `🧹 Rate limit cleanup completed. Active IPs: ${this.ipQueryLimits.size}`
+    );
   }
 }
 

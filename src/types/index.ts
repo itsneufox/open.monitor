@@ -2,36 +2,34 @@ import { Client, Collection } from 'discord.js';
 import Keyv from 'keyv';
 import { RateLimitManager } from '../utils/rateLimitManager';
 
-// Basic server configuration
 export interface ServerConfig {
-  id: string; // Unique ID: "ip:port"
-  name: string; // Friendly name
+  id: string;
+  name: string;
   ip: string;
   port: number;
-  addedAt: number; // Timestamp
-  addedBy: string; // User ID who added it
+  addedAt: number;
+  addedBy: string;
 }
 
-// Simple server info for query functions
 export interface SimpleServer {
   ip: string;
   port: number;
 }
 
-// Guild's monitoring configuration
 export interface IntervalConfig {
-  activeServerId?: string; // Which server is currently being monitored
-  statusChannel?: string; // Channel for status embeds
-  chartChannel?: string; // Channel for daily charts
-  serverIpChannel?: string; // Channel to rename with server IP
-  playerCountChannel?: string; // Channel to rename with player count
+  activeServerId?: string;
+  statusChannel?: string;
+  chartChannel?: string;
+  serverIpChannel?: string;
+  playerCountChannel?: string;
   enabled: boolean;
-  next: number; // Next update time
-  statusMessage: string | null; // Message ID of current status message
-  managementRoleId?: string; // Role that can manage server settings
+  next: number;
+  statusMessage: string | null;
+  managementRoleId?: string;
+  dataLossNotificationSent?: boolean;
+  preferredLanguage?: 'en' | 'pt' | 'es';
 }
 
-// Chart data for a specific server
 export interface ChartData {
   maxPlayersToday: number;
   days: Array<{
@@ -43,39 +41,33 @@ export interface ChartData {
   msg?: string;
 }
 
-// Uptime statistics for a specific server
 export interface UptimeStats {
   uptime: number;
   downtime: number;
 }
 
-// Guild configuration cache structure
 export interface GuildConfig {
   servers: ServerConfig[];
   interval?: IntervalConfig;
 }
 
-// Custom Discord client with database connections
 export interface CustomClient extends Client {
   commands: Collection<string, any>;
-
-  // Database collections
-  servers: Keyv<ServerConfig[]>; // Array of servers per guild
-  intervals: Keyv<IntervalConfig>; // Monitoring config per guild
-  maxPlayers: Keyv<ChartData>; // Chart data per server (key: "ip:port")
-  uptimes: Keyv<UptimeStats>; // Uptime stats per server (key: "ip:port")
-
-  // Rate limit manager
+  servers: Keyv<ServerConfig[]>;
+  intervals: Keyv<IntervalConfig>;
+  maxPlayers: Keyv<ChartData>;
+  uptimes: Keyv<UptimeStats>;
   rateLimitManager: RateLimitManager;
-
-  // In-memory cache for faster access
   guildConfigs: Collection<string, GuildConfig>;
 }
 
-// Helper function to convert ServerConfig to SimpleServer
 export function toSimpleServer(server: ServerConfig): SimpleServer {
   return {
     ip: server.ip,
     port: server.port,
   };
+}
+
+export function getServerDataKey(guildId: string, serverId: string): string {
+  return `${guildId}:${serverId}`;
 }

@@ -61,7 +61,7 @@ export async function checkPermissionOrReply(
     // Check if interaction is already replied/deferred
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
-        content: errorMessage,
+        content: 'message',
         flags: MessageFlags.Ephemeral,
       });
     }

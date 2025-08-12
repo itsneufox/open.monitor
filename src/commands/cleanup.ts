@@ -2,6 +2,7 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   EmbedBuilder,
+  MessageFlags,
 } from 'discord.js';
 import { CustomClient } from '../types';
 import { DatabaseCleaner } from '../utils/databaseCleaner';
@@ -17,17 +18,17 @@ export async function execute(
   if (interaction.user.id !== process.env.OWNER_ID) {
     await interaction.reply({
       content: '❌ This command is only available to the bot owner.',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
     const cleaner = new DatabaseCleaner(client);
     const result = await cleaner.runPeriodicCleanup();
-    
+
     const embed = new EmbedBuilder()
       .setColor(result.errors.length > 0 ? 0xff9500 : 0x00ff00)
       .setTitle('🧹 Database Cleanup Complete')
@@ -35,7 +36,7 @@ export async function execute(
       .addFields({
         name: 'Errors',
         value: result.errors.length.toString(),
-        inline: true
+        inline: true,
       })
       .setTimestamp();
 
@@ -43,12 +44,11 @@ export async function execute(
       embed.addFields({
         name: 'Error Details',
         value: result.errors.join('\n'),
-        inline: false
+        inline: false,
       });
     }
 
     await interaction.editReply({ embeds: [embed] });
-    
   } catch (error) {
     console.error('Cleanup command error:', error);
     await interaction.editReply('❌ An error occurred during cleanup.');

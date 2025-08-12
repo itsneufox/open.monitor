@@ -2,9 +2,11 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   EmbedBuilder,
+  MessageFlags,
 } from 'discord.js';
 import { CustomClient } from '../types';
 import { getPlayerCount, getStatus, getRoleColor } from '../utils';
+import { getServerDataKey } from '../types';
 
 export const data = new SlashCommandBuilder()
   .setName('forceupdate')
@@ -29,12 +31,12 @@ export async function execute(
   if (interaction.user.id !== process.env.OWNER_ID) {
     await interaction.reply({
       content: '❌ This command is only available to the bot owner.',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const targetGuildId = interaction.options.getString('guild');
   const allGuilds = interaction.options.getBoolean('all_guilds') || false;
@@ -46,7 +48,10 @@ export async function execute(
     if (allGuilds) {
       // Force update all guilds with active monitoring
       for (const [guildId, guildConfig] of client.guildConfigs.entries()) {
-        if (guildConfig.interval?.enabled && guildConfig.interval.activeServerId) {
+        if (
+          guildConfig.interval?.enabled &&
+          guildConfig.interval.activeServerId
+        ) {
           try {
             await performGuildUpdate(client, guildId, guildConfig);
             updatedGuilds++;
@@ -60,13 +65,16 @@ export async function execute(
       const embed = new EmbedBuilder()
         .setColor(errors.length > 0 ? 0xff9500 : 0x00ff00)
         .setTitle('🔄 Force Update - All Guilds')
-        .setDescription(`Updated ${updatedGuilds} guild(s) with active monitoring`)
+        .setDescription(
+          `Updated ${updatedGuilds} guild(s) with active monitoring`
+        )
         .addFields({
           name: 'Status',
-          value: errors.length > 0 
-            ? `${updatedGuilds} successful, ${errors.length} errors`
-            : 'All updates successful',
-          inline: true
+          value:
+            errors.length > 0
+              ? `${updatedGuilds} successful, ${errors.length} errors`
+              : 'All updates successful',
+          inline: true,
         })
         .setTimestamp();
 
@@ -74,7 +82,7 @@ export async function execute(
         embed.addFields({
           name: 'Errors',
           value: errors.join('\n'),
-          inline: false
+          inline: false,
         });
       }
 
@@ -85,8 +93,11 @@ export async function execute(
     // Single guild update
     const guildId = targetGuildId || interaction.guildId!;
     const guildConfig = client.guildConfigs.get(guildId);
-    
-    if (!guildConfig?.interval?.enabled || !guildConfig.interval.activeServerId) {
+
+    if (
+      !guildConfig?.interval?.enabled ||
+      !guildConfig.interval.activeServerId
+    ) {
       await interaction.editReply(
         `❌ No active monitoring configured for guild ${guildId}.`
       );
@@ -116,28 +127,29 @@ export async function execute(
         {
           name: 'Guild',
           value: guild?.name || 'Unknown',
-          inline: true
+          inline: true,
         },
         {
           name: 'Server',
           value: activeServer.name,
-          inline: true
+          inline: true,
         },
         {
           name: 'Address',
           value: `${activeServer.ip}:${activeServer.port}`,
-          inline: true
+          inline: true,
         }
       )
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });
 
-    console.log(`Force update completed by ${interaction.user.tag} for guild ${guild?.name || guildId}`);
-
+    console.log(
+      `Force update completed by ${interaction.user.tag} for guild ${guild?.name || guildId}`
+    );
   } catch (error) {
     console.error('Force update error:', error);
-    
+
     const errorEmbed = new EmbedBuilder()
       .setColor(0xff0000)
       .setTitle('❌ Force Update Failed')
@@ -145,7 +157,7 @@ export async function execute(
       .addFields({
         name: 'Error',
         value: error instanceof Error ? error.message : 'Unknown error',
-        inline: false
+        inline: false,
       })
       .setTimestamp();
 
@@ -154,11 +166,17 @@ export async function execute(
 }
 
 // Function to perform the actual guild update
-async function performGuildUpdate(client: CustomClient, guildId: string, guildConfig: any): Promise<void> {
+async function performGuildUpdate(
+  client: CustomClient,
+  guildId: string,
+  guildConfig: any
+): Promise<void> {
   const { interval, servers } = guildConfig;
-  
+
   // Find the active server
-  const activeServer = servers.find((s: any) => s.id === interval.activeServerId);
+  const activeServer = servers.find(
+    (s: any) => s.id === interval.activeServerId
+  );
   if (!activeServer) {
     throw new Error('Active server not found');
   }
@@ -195,7 +213,7 @@ async function performGuildUpdate(client: CustomClient, guildId: string, guildCo
   chartData.name = info.name;
   chartData.maxPlayers = info.maxPlayers;
 
-  await client.maxPlayers.set(activeServer.id, chartData);
+await client.maxPlayers.set(getServerDataKey(guildId, activeServer.id), chartData);
 
   // Update uptime stats
   if (info.isOnline) {
@@ -207,8 +225,10 @@ async function performGuildUpdate(client: CustomClient, guildId: string, guildCo
 
   // Update status channel
   if (interval.statusChannel) {
-    const statusChannel = await client.channels.fetch(interval.statusChannel).catch(() => null);
-    
+    const statusChannel = await client.channels
+      .fetch(interval.statusChannel)
+      .catch(() => null);
+
     if (statusChannel && 'send' in statusChannel) {
       const color = getRoleColor(guild);
       // Pass guildId and isMonitoring correctly
@@ -217,7 +237,9 @@ async function performGuildUpdate(client: CustomClient, guildId: string, guildCo
       // Try to edit existing message first
       if (interval.statusMessage) {
         try {
-          const existingMsg = await statusChannel.messages.fetch(interval.statusMessage);
+          const existingMsg = await statusChannel.messages.fetch(
+            interval.statusMessage
+          );
           await existingMsg.edit({ embeds: [serverEmbed] });
         } catch (error) {
           // Create new message if edit fails
@@ -237,7 +259,7 @@ async function performGuildUpdate(client: CustomClient, guildId: string, guildCo
   // Set next update time (reset to normal schedule)
   interval.next = Date.now() + 600000; // 10 minutes
   await client.intervals.set(guildId, interval);
-  
+
   // Update cache
   client.guildConfigs.set(guildId, guildConfig);
 }

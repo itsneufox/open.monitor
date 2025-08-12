@@ -110,7 +110,11 @@ export class SAMPQuery {
       offset += 2;
 
       // Validate hostname string
-      const hostnameValidation = SecurityValidator.validateStringField(data, offset, 128);
+      const hostnameValidation = SecurityValidator.validateStringField(
+        data,
+        offset,
+        128
+      );
       if (!hostnameValidation.valid) {
         console.warn('Invalid hostname field in server response');
         return null;
@@ -119,11 +123,17 @@ export class SAMPQuery {
       const hostnameLength = hostnameValidation.length;
       offset += 4;
 
-      const hostname = data.subarray(offset, offset + hostnameLength).toString('utf8');
+      const hostname = data
+        .subarray(offset, offset + hostnameLength)
+        .toString('utf8');
       offset += hostnameLength;
 
       // Validate gamemode string
-      const gamemodeValidation = SecurityValidator.validateStringField(data, offset, 64);
+      const gamemodeValidation = SecurityValidator.validateStringField(
+        data,
+        offset,
+        64
+      );
       if (!gamemodeValidation.valid) {
         console.warn('Invalid gamemode field in server response');
         return null;
@@ -132,11 +142,17 @@ export class SAMPQuery {
       const gamemodeLength = gamemodeValidation.length;
       offset += 4;
 
-      const gamemode = data.subarray(offset, offset + gamemodeLength).toString('utf8');
+      const gamemode = data
+        .subarray(offset, offset + gamemodeLength)
+        .toString('utf8');
       offset += gamemodeLength;
 
       // Validate language string
-      const languageValidation = SecurityValidator.validateStringField(data, offset, 64);
+      const languageValidation = SecurityValidator.validateStringField(
+        data,
+        offset,
+        64
+      );
       if (!languageValidation.valid) {
         console.warn('Invalid language field in server response');
         return null;
@@ -145,11 +161,15 @@ export class SAMPQuery {
       const languageLength = languageValidation.length;
       offset += 4;
 
-      const language = data.subarray(offset, offset + languageLength).toString('utf8');
+      const language = data
+        .subarray(offset, offset + languageLength)
+        .toString('utf8');
 
       // Sanity check values
       if (players > 1000 || maxplayers > 1000 || players > maxplayers) {
-        console.warn(`Suspicious player count values: ${players}/${maxplayers}`);
+        console.warn(
+          `Suspicious player count values: ${players}/${maxplayers}`
+        );
         return null;
       }
 
@@ -377,7 +397,8 @@ export class SAMPQuery {
       return null;
     }
 
-    if (!SecurityValidator.canQueryIP(server.ip, guildId, isMonitoringCycle)) { // Use actual guild ID
+    if (!SecurityValidator.canQueryIP(server.ip, guildId, isMonitoringCycle)) {
+      // Use actual guild ID
       console.warn(`Rate limit exceeded for IP: ${server.ip}`);
       return null;
     }
@@ -411,7 +432,8 @@ export class SAMPQuery {
         resolve(null);
       });
 
-      const packet = customPacket || this.createPacket(server.ip, server.port, opcode);
+      const packet =
+        customPacket || this.createPacket(server.ip, server.port, opcode);
 
       socket.send(packet, server.port, server.ip, error => {
         if (error) {
@@ -424,27 +446,56 @@ export class SAMPQuery {
     });
   }
 
-  public async getServerInfo(server: ServerConfig, guildId: string = 'unknown', isMonitoring: boolean = false): Promise<SAMPInfo | null> {
-    const data = await this.query(server, 'i', guildId, undefined, isMonitoring);
+  public async getServerInfo(
+    server: ServerConfig,
+    guildId: string = 'unknown',
+    isMonitoring: boolean = false
+  ): Promise<SAMPInfo | null> {
+    const data = await this.query(
+      server,
+      'i',
+      guildId,
+      undefined,
+      isMonitoring
+    );
     return data ? this.parseInfoResponse(data) : null;
   }
 
-  public async getServerRules(server: ServerConfig, guildId: string = 'unknown', isMonitoring: boolean = false): Promise<SAMPRules> {
-    const data = await this.query(server, 'r', guildId, undefined, isMonitoring);
+  public async getServerRules(
+    server: ServerConfig,
+    guildId: string = 'unknown',
+    isMonitoring: boolean = false
+  ): Promise<SAMPRules> {
+    const data = await this.query(
+      server,
+      'r',
+      guildId,
+      undefined,
+      isMonitoring
+    );
     return data ? this.parseRulesResponse(data) : {};
   }
 
-  public async getPlayers(server: ServerConfig, guildId: string = 'unknown'): Promise<SAMPPlayer[]> {
+  public async getPlayers(
+    server: ServerConfig,
+    guildId: string = 'unknown'
+  ): Promise<SAMPPlayer[]> {
     const data = await this.query(server, 'c', guildId);
     return data ? this.parsePlayersResponse(data) : [];
   }
 
-  public async getDetailedPlayers(server: ServerConfig, guildId: string = 'unknown'): Promise<SAMPDetailedPlayer[]> {
+  public async getDetailedPlayers(
+    server: ServerConfig,
+    guildId: string = 'unknown'
+  ): Promise<SAMPDetailedPlayer[]> {
     const data = await this.query(server, 'd', guildId);
     return data ? this.parseDetailedPlayersResponse(data) : [];
   }
 
-  public async getPing(server: ServerConfig, guildId: string = 'unknown'): Promise<number> {
+  public async getPing(
+    server: ServerConfig,
+    guildId: string = 'unknown'
+  ): Promise<number> {
     const startTime = Date.now();
     const sentSequence = Array.from({ length: 4 }, () =>
       Math.floor(Math.random() * 256)
@@ -469,9 +520,19 @@ export class SAMPQuery {
     return pingData ? endTime - startTime : -1;
   }
 
-  public async isOpenMP(server: ServerConfig, guildId: string = 'unknown', isMonitoring: boolean = false): Promise<boolean> {
+  public async isOpenMP(
+    server: ServerConfig,
+    guildId: string = 'unknown',
+    isMonitoring: boolean = false
+  ): Promise<boolean> {
     try {
-      const data = await this.query(server, 'o', guildId, undefined, isMonitoring);
+      const data = await this.query(
+        server,
+        'o',
+        guildId,
+        undefined,
+        isMonitoring
+      );
       return data !== null && data.length > 11;
     } catch (error) {
       return false;
@@ -479,16 +540,29 @@ export class SAMPQuery {
   }
 
   // Get open.mp extra information (discord, banners, etc.)
-  public async getOpenMPExtraInfo(server: ServerConfig, guildId: string = 'unknown', isMonitoring: boolean = false): Promise<OpenMPExtraInfo | null> {
+  public async getOpenMPExtraInfo(
+    server: ServerConfig,
+    guildId: string = 'unknown',
+    isMonitoring: boolean = false
+  ): Promise<OpenMPExtraInfo | null> {
     try {
-      const data = await this.query(server, 'o', guildId, undefined, isMonitoring);
+      const data = await this.query(
+        server,
+        'o',
+        guildId,
+        undefined,
+        isMonitoring
+      );
       return data ? this.parseOpenMPExtraInfo(data) : null;
     } catch (error) {
       return null;
     }
   }
 
-  public async getFullServerInfo(server: ServerConfig, guildId: string = 'unknown'): Promise<Partial<SAMPFullInfo>> {
+  public async getFullServerInfo(
+    server: ServerConfig,
+    guildId: string = 'unknown'
+  ): Promise<Partial<SAMPFullInfo>> {
     console.log(`Performing full SA:MP query for ${server.ip}:${server.port}`);
 
     const results: Partial<SAMPFullInfo> = {};
@@ -549,7 +623,10 @@ export class SAMPQuery {
           `Basic players: ${results.players.length} players retrieved`
         );
 
-        results.detailedPlayers = await this.getDetailedPlayers(server, guildId);
+        results.detailedPlayers = await this.getDetailedPlayers(
+          server,
+          guildId
+        );
         console.log(
           `Detailed players: ${results.detailedPlayers.length} players with ping info`
         );
@@ -569,7 +646,10 @@ export class SAMPQuery {
     return results;
   }
 
-  public async testAllOpcodes(server: ServerConfig, guildId: string = 'unknown'): Promise<void> {
+  public async testAllOpcodes(
+    server: ServerConfig,
+    guildId: string = 'unknown'
+  ): Promise<void> {
     console.log(`Testing all SA:MP opcodes for ${server.ip}:${server.port}`);
 
     const opcodes = [

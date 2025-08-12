@@ -52,7 +52,11 @@ export async function getStatus(
     // Get open.mp extra info for banners and logos
     if (isOpenMP) {
       try {
-        const extraInfo = await sampQuery.getOpenMPExtraInfo(server, guildId, isMonitoring);
+        const extraInfo = await sampQuery.getOpenMPExtraInfo(
+          server,
+          guildId,
+          isMonitoring
+        );
         if (extraInfo) {
           // Set banner image (prefer dark banner, fallback to light banner)
           if (extraInfo.darkBanner) {
@@ -72,7 +76,9 @@ export async function getStatus(
     }
 
     // Clean description with server name and address
-    embed.setDescription(`**${info.hostname}**\n\`${server.ip}:${server.port}\``);
+    embed.setDescription(
+      `**${info.hostname}**\n\`${server.ip}:${server.port}\``
+    );
 
     embed.addFields(
       {

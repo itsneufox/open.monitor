@@ -1,4 +1,4 @@
-export { getChart } from './getChart';
+export { generateChart as getChart } from './chartGenerator';
 export { getPlayerCount } from './getPlayerCount';
 export { getRoleColor } from './getRoleColor';
 export { getStatus } from './getStatus';
