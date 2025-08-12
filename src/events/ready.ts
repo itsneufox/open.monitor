@@ -55,130 +55,115 @@ export async function execute(client: CustomClient): Promise<void> {
     console.error('Error loading guild configurations:', error);
   }
 
-setInterval(async () => {
-  for (const guild of client.guilds.cache.values()) {
-    try {
-      const guildConfig = client.guildConfigs.get(guild.id);
-      if (!guildConfig?.interval || !guildConfig.interval.enabled) continue;
+  setInterval(async () => {
+    for (const guild of client.guilds.cache.values()) {
+      try {
+        const guildConfig = client.guildConfigs.get(guild.id);
+        if (!guildConfig?.interval || !guildConfig.interval.enabled) continue;
 
-      const { interval, servers } = guildConfig;
-            if (Date.now() < interval.next || !interval.activeServerId) continue;
+        const { interval, servers } = guildConfig;
+        const now = Date.now();
 
-      const activeServer = servers.find(
-        s => s.id === interval.activeServerId
-      );
-      if (!activeServer) {
-        if (!isProduction) {
-          console.warn(
-            `Active server ${interval.activeServerId} not found for guild ${guild.name}`
-          );
+        if (!interval.activeServerId) continue;
+
+        const activeServer = servers.find(s => s.id === interval.activeServerId);
+        if (!activeServer) continue;
+
+        const statusUpdateDue = now >= (interval.next || 0);
+
+        const lastVoiceUpdate = interval.lastVoiceUpdate || 0;
+        const voiceUpdateDue = now - lastVoiceUpdate >= 600000;
+
+        if (!statusUpdateDue && !voiceUpdateDue) continue;
+
+        const serverDataKey = getServerDataKey(guild.id, activeServer.id);
+
+        let onlineStats = await client.uptimes.get(serverDataKey);
+        if (!onlineStats) {
+          onlineStats = { uptime: 0, downtime: 0 };
         }
-        continue;
-      }
 
-      interval.next = Date.now() + 300000;
+        let chartData = await client.maxPlayers.get(serverDataKey);
+        if (!chartData) {
+          chartData = {
+            maxPlayersToday: 0,
+            days: [],
+            name: '',
+            maxPlayers: 0,
+          };
+          await client.maxPlayers.set(serverDataKey, chartData);
+        }
 
-      const serverDataKey = getServerDataKey(guild.id, activeServer.id);
+        const info = await client.rateLimitManager.executeWithRetry(
+          () => getPlayerCount(activeServer, guild.id, true),
+          3
+        );
 
-      let onlineStats = await client.uptimes.get(serverDataKey);
-      if (!onlineStats) {
-        onlineStats = { uptime: 0, downtime: 0 };
-      }
-
-      let chartData = await client.maxPlayers.get(serverDataKey);
-      if (!chartData) {
-        chartData = {
-          maxPlayersToday: 0,
-          days: [],
-          name: '',
-          maxPlayers: 0,
-        };
+        if (info.playerCount > chartData.maxPlayersToday) {
+          chartData.maxPlayersToday = info.playerCount;
+        }
+        chartData.name = info.name;
+        chartData.maxPlayers = info.maxPlayers;
         await client.maxPlayers.set(serverDataKey, chartData);
-      }
 
-      const info = await client.rateLimitManager.executeWithRetry(
-        () => getPlayerCount(activeServer, guild.id, true),
-        3
-      );
-
-      if (info.playerCount > chartData.maxPlayersToday) {
-        chartData.maxPlayersToday = info.playerCount;
-      }
-      chartData.name = info.name;
-      chartData.maxPlayers = info.maxPlayers;
-
-      await client.maxPlayers.set(serverDataKey, chartData);
-
-      if (info.isOnline) {
-        onlineStats.uptime++;
-      } else {
-        onlineStats.downtime++;
-      }
-      await client.uptimes.set(serverDataKey, onlineStats);
-
-      if (interval.statusChannel) {
-        try {
-          const statusChannel = (await client.channels
-            .fetch(interval.statusChannel)
-            .catch(() => null)) as TextChannel | null;
-
-          if (statusChannel) {
-            const color = getRoleColor(guild);
-            const serverEmbed = await getStatus(
-              activeServer,
-              color,
-              guild.id,
-              true
-            );
-
-            let messageUpdated = false;
-
-            if (interval.statusMessage) {
-              try {
-                const existingMsg = await statusChannel.messages.fetch(
-                  interval.statusMessage
-                );
-                await existingMsg.edit({ embeds: [serverEmbed] });
-                if (!isProduction) {
-                  console.log(`🔄 Updated status message in ${guild.name} (5min cycle)`);
-                }
-                messageUpdated = true;
-              } catch (error) {
-                if (!isProduction) {
-                  console.log(
-                    `Could not edit message ${interval.statusMessage} in ${guild.name}, creating new one`
-                  );
-                }
-              }
-            }
-
-            if (!messageUpdated) {
-              try {
-                const newMsg = await statusChannel.send({
-                  embeds: [serverEmbed],
-                });
-                interval.statusMessage = newMsg.id;
-                await client.intervals.set(guild.id, interval);
-                if (!isProduction) {
-                  console.log(`Created new status message in ${guild.name}`);
-                }
-              } catch (sendError) {
-                console.error(`Failed to send status message:`, sendError);
-              }
-            }
-          }
-        } catch (error) {
-          console.error(
-            `Failed to update status channel for ${guild.name}:`,
-            error
-          );
+        if (info.isOnline) {
+          onlineStats.uptime++;
+        } else {
+          onlineStats.downtime++;
         }
-      }
-      const lastVoiceUpdate = interval.lastVoiceUpdate || 0;
-      const timeSinceVoiceUpdate = Date.now() - lastVoiceUpdate;
-      
-      if (timeSinceVoiceUpdate >= 600000) {
-        if (interval.playerCountChannel) {
+        await client.uptimes.set(serverDataKey, onlineStats);
+
+        if (statusUpdateDue && interval.statusChannel) {
+          try {
+            const statusChannel = (await client.channels
+              .fetch(interval.statusChannel)
+              .catch(() => null)) as TextChannel | null;
+
+            if (statusChannel) {
+              const color = getRoleColor(guild);
+              const serverEmbed = await getStatus(
+                activeServer,
+                color,
+                guild.id,
+                true
+              );
+
+              let messageUpdated = false;
+
+              if (interval.statusMessage) {
+                try {
+                  const existingMsg = await statusChannel.messages.fetch(
+                    interval.statusMessage
+                  );
+                  await existingMsg.edit({ embeds: [serverEmbed] });
+                  if (!isProduction) {
+                    console.log(`🔄 Updated status message in ${guild.name} (5min cycle)`);
+                  }
+                  messageUpdated = true;
+                } catch (error) {
+                }
+              }
+
+              if (!messageUpdated) {
+                try {
+                  const newMsg = await statusChannel.send({ embeds: [serverEmbed] });
+                  interval.statusMessage = newMsg.id;
+                  if (!isProduction) {
+                    console.log(`Created new status message in ${guild.name}`);
+                  }
+                } catch (sendError) {
+                  console.error(`Failed to send status message:`, sendError);
+                }
+              }
+            }
+          } catch (error) {
+            console.error(`Failed to update status channel for ${guild.name}:`, error);
+          }
+
+          interval.next = now + 300000;
+        }
+
+        if (voiceUpdateDue && interval.playerCountChannel) {
           const guildUpdateData = lastChannelUpdate.get(guild.id) || {
             time: 0,
             count: 0,
@@ -219,37 +204,24 @@ setInterval(async () => {
                       );
                     }
                   } catch (error: any) {
-                    if (error.code === 50013) {
-                      console.error(
-                        `Missing permissions to update channel ${channel.name} in ${guild.name}`
-                      );
-                    } else if (error.status === 429) {
-                      console.warn(
-                        `Rate limited updating channel ${channel.name} in ${guild.name} - will retry later`
-                      );
-                    } else {
-                      console.error(
-                        `Error updating channel ${channel.name}:`,
-                        error
-                      );
-                    }
                   }
                 }
               }
             },
             statusChange ? 'high' : 'normal'
           );
-        }
-        interval.lastVoiceUpdate = Date.now();
-        await client.intervals.set(guild.id, interval);
-      }
 
-      client.guildConfigs.set(guild.id, guildConfig);
-    } catch (error) {
-      console.error(`Error processing guild ${guild.name}:`, error);
+          interval.lastVoiceUpdate = now;
+        }
+
+        await client.intervals.set(guild.id, interval);
+        client.guildConfigs.set(guild.id, guildConfig);
+
+      } catch (error) {
+        console.error(`Error processing guild ${guild.name}:`, error);
+      }
     }
-  }
-}, 300000);
+  }, 60000);
 
   function msUntilMidnight(): number {
     const now = new Date();
