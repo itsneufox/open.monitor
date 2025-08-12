@@ -1,4 +1,5 @@
 import * as dgram from 'dgram';
+import * as iconv from 'iconv-lite';
 import { ServerConfig } from '../types';
 import { SecurityValidator } from './securityValidator';
 
@@ -50,8 +51,32 @@ interface SAMPFullInfo {
 }
 
 export class SAMPQuery {
+  private decodeString(buffer: Buffer): string {
+    try {
+      let decoded = buffer.toString('utf8');
+
+      if (decoded.includes('�') || decoded.includes('\ufffd')) {
+        const encodings = ['latin1', 'cp1252', 'iso-8859-1', 'cp850'];
+
+        for (const encoding of encodings) {
+          try {
+            decoded = iconv.decode(buffer, encoding);
+            if (!decoded.includes('�') && !decoded.includes('\ufffd')) {
+              break;
+            }
+          } catch (error) {
+            continue;
+          }
+        }
+      }
+
+      return decoded.trim();
+    } catch (error) {
+      return iconv.decode(buffer, 'latin1').trim();
+    }
+  }
+
   private createPacket(ip: string, port: number, opcode: string): Buffer {
-    // Build SA:MP query packet: "SAMP" + IP octets + port bytes + OPCODE
     const ipOctets = ip.split('.').map(octet => parseInt(octet, 10));
     const portLow = port & 0xff;
     const portHigh = (port >> 8) & 0xff;
@@ -80,7 +105,6 @@ export class SAMPQuery {
   }
 
   private createPingPacket(ip: string, port: number): Buffer {
-    // Ping packet needs 4 random bytes after the base packet
     const basePacket = this.createPacket(ip, port, 'p');
     const packet = Buffer.alloc(15);
 
@@ -93,12 +117,11 @@ export class SAMPQuery {
     return packet;
   }
 
-  // OPCODE 'i' - Server Information
   private parseInfoResponse(data: Buffer): SAMPInfo | null {
     try {
-      let offset = 11; // Skip validated header
+      let offset = 11;
 
-      if (offset + 7 > data.length) return null; // Need minimum fields
+      if (offset + 7 > data.length) return null;
 
       const password = data.readUInt8(offset) === 1;
       offset += 1;
@@ -109,7 +132,6 @@ export class SAMPQuery {
       const maxplayers = data.readUInt16LE(offset);
       offset += 2;
 
-      // Validate hostname string
       const hostnameValidation = SecurityValidator.validateStringField(
         data,
         offset,
@@ -123,12 +145,11 @@ export class SAMPQuery {
       const hostnameLength = hostnameValidation.length;
       offset += 4;
 
-      const hostname = data
-        .subarray(offset, offset + hostnameLength)
-        .toString('utf8');
+      const hostname = this.decodeString(
+        data.subarray(offset, offset + hostnameLength)
+      );
       offset += hostnameLength;
 
-      // Validate gamemode string
       const gamemodeValidation = SecurityValidator.validateStringField(
         data,
         offset,
@@ -142,12 +163,11 @@ export class SAMPQuery {
       const gamemodeLength = gamemodeValidation.length;
       offset += 4;
 
-      const gamemode = data
-        .subarray(offset, offset + gamemodeLength)
-        .toString('utf8');
+      const gamemode = this.decodeString(
+        data.subarray(offset, offset + gamemodeLength)
+      );
       offset += gamemodeLength;
 
-      // Validate language string
       const languageValidation = SecurityValidator.validateStringField(
         data,
         offset,
@@ -161,11 +181,10 @@ export class SAMPQuery {
       const languageLength = languageValidation.length;
       offset += 4;
 
-      const language = data
-        .subarray(offset, offset + languageLength)
-        .toString('utf8');
+      const language = this.decodeString(
+        data.subarray(offset, offset + languageLength)
+      );
 
-      // Sanity check values
       if (players > 1000 || maxplayers > 1000 || players > maxplayers) {
         console.warn(
           `Suspicious player count values: ${players}/${maxplayers}`
@@ -177,7 +196,7 @@ export class SAMPQuery {
         password,
         players,
         maxplayers,
-        hostname: hostname.slice(0, 128), // Truncate to prevent overflow
+        hostname: hostname.slice(0, 128),
         gamemode: gamemode.slice(0, 64),
         language: language.slice(0, 64),
       };
@@ -187,11 +206,9 @@ export class SAMPQuery {
     }
   }
 
-  // OPCODE 'r' - Server Rules
   private parseRulesResponse(data: Buffer): SAMPRules {
     try {
       let offset = 11;
-
       const ruleCount = data.readUInt16LE(offset);
       offset += 2;
 
@@ -201,17 +218,17 @@ export class SAMPQuery {
         const nameLength = data.readUInt8(offset);
         offset += 1;
 
-        const ruleName = data
-          .subarray(offset, offset + nameLength)
-          .toString('utf8');
+        const ruleName = this.decodeString(
+          data.subarray(offset, offset + nameLength)
+        );
         offset += nameLength;
 
         const valueLength = data.readUInt8(offset);
         offset += 1;
 
-        const ruleValue = data
-          .subarray(offset, offset + valueLength)
-          .toString('utf8');
+        const ruleValue = this.decodeString(
+          data.subarray(offset, offset + valueLength)
+        );
         offset += valueLength;
 
         rules[ruleName] = ruleValue;
@@ -224,7 +241,6 @@ export class SAMPQuery {
     }
   }
 
-  // OPCODE 'c' - Client List (Basic Player Info)
   private parsePlayersResponse(data: Buffer): SAMPPlayer[] {
     try {
       let offset = 11;
@@ -238,9 +254,9 @@ export class SAMPQuery {
         const nameLength = data.readUInt8(offset);
         offset += 1;
 
-        const name = data
-          .subarray(offset, offset + nameLength)
-          .toString('utf8');
+        const name = this.decodeString(
+          data.subarray(offset, offset + nameLength)
+        );
         offset += nameLength;
 
         const score = data.readInt32LE(offset);
@@ -256,7 +272,6 @@ export class SAMPQuery {
     }
   }
 
-  // OPCODE 'd' - Detailed Player Information
   private parseDetailedPlayersResponse(data: Buffer): SAMPDetailedPlayer[] {
     try {
       let offset = 11;
@@ -273,9 +288,9 @@ export class SAMPQuery {
         const nameLength = data.readUInt8(offset);
         offset += 1;
 
-        const name = data
-          .subarray(offset, offset + nameLength)
-          .toString('utf8');
+        const name = this.decodeString(
+          data.subarray(offset, offset + nameLength)
+        );
         offset += nameLength;
 
         const score = data.readInt32LE(offset);
@@ -294,7 +309,6 @@ export class SAMPQuery {
     }
   }
 
-  // OPCODE 'p' - Ping
   private parsePingResponse(
     data: Buffer,
     sentSequence: number[]
@@ -319,61 +333,53 @@ export class SAMPQuery {
     }
   }
 
-  // OPCODE 'o' - open.mp Extra Info
   private parseOpenMPExtraInfo(data: Buffer): OpenMPExtraInfo | null {
     try {
       if (data.length < 11) return null;
 
-      let offset = 11; // Skip header
+      let offset = 11;
       const extraInfo: OpenMPExtraInfo = {};
 
-      // Read discord link length and data
       if (offset + 4 <= data.length) {
         const discordLength = data.readUInt32LE(offset);
         offset += 4;
         if (discordLength > 0 && offset + discordLength <= data.length) {
-          extraInfo.discord = data
-            .subarray(offset, offset + discordLength)
-            .toString('utf8');
+          extraInfo.discord = this.decodeString(
+            data.subarray(offset, offset + discordLength)
+          );
           offset += discordLength;
         }
       }
 
-      // Read light banner URL
       if (offset + 4 <= data.length) {
         const lightBannerLength = data.readUInt32LE(offset);
         offset += 4;
-        if (
-          lightBannerLength > 0 &&
-          offset + lightBannerLength <= data.length
-        ) {
-          extraInfo.lightBanner = data
-            .subarray(offset, offset + lightBannerLength)
-            .toString('utf8');
+        if (lightBannerLength > 0 && offset + lightBannerLength <= data.length) {
+          extraInfo.lightBanner = this.decodeString(
+            data.subarray(offset, offset + lightBannerLength)
+          );
           offset += lightBannerLength;
         }
       }
 
-      // Read dark banner URL
       if (offset + 4 <= data.length) {
         const darkBannerLength = data.readUInt32LE(offset);
         offset += 4;
         if (darkBannerLength > 0 && offset + darkBannerLength <= data.length) {
-          extraInfo.darkBanner = data
-            .subarray(offset, offset + darkBannerLength)
-            .toString('utf8');
+          extraInfo.darkBanner = this.decodeString(
+            data.subarray(offset, offset + darkBannerLength)
+          );
           offset += darkBannerLength;
         }
       }
 
-      // Read logo URL
       if (offset + 4 <= data.length) {
         const logoLength = data.readUInt32LE(offset);
         offset += 4;
         if (logoLength > 0 && offset + logoLength <= data.length) {
-          extraInfo.logo = data
-            .subarray(offset, offset + logoLength)
-            .toString('utf8');
+          extraInfo.logo = this.decodeString(
+            data.subarray(offset, offset + logoLength)
+          );
           offset += logoLength;
         }
       }
@@ -388,7 +394,7 @@ export class SAMPQuery {
   private async query(
     server: ServerConfig,
     opcode: string,
-    guildId: string, // Add guild ID parameter
+    guildId: string,
     customPacket?: Buffer,
     isMonitoringCycle: boolean = false
   ): Promise<Buffer | null> {
@@ -398,7 +404,6 @@ export class SAMPQuery {
     }
 
     if (!SecurityValidator.canQueryIP(server.ip, guildId, isMonitoringCycle)) {
-      // Use actual guild ID
       console.warn(`Rate limit exceeded for IP: ${server.ip}`);
       return null;
     }
@@ -502,7 +507,6 @@ export class SAMPQuery {
     );
     const pingPacket = this.createPingPacket(server.ip, server.port);
 
-    // Set our sequence in the packet
     for (let i = 0; i < 4; i++) {
       const sequenceValue = sentSequence[i];
       if (sequenceValue !== undefined) {
@@ -526,20 +530,27 @@ export class SAMPQuery {
     isMonitoring: boolean = false
   ): Promise<boolean> {
     try {
-      const data = await this.query(
-        server,
-        'o',
-        guildId,
-        undefined,
-        isMonitoring
-      );
-      return data !== null && data.length > 11;
+      const data = await this.query(server, 'o', guildId, undefined, isMonitoring);
+      if (data !== null && data.length > 11) {
+        return true;
+      }
+
+      const rules = await this.getServerRules(server, guildId, isMonitoring);
+
+      if (rules.allowed_clients) {
+        return true;
+      }
+
+      if (rules.version && rules.version.includes('omp ')) {
+        return true;
+      }
+
+      return false;
     } catch (error) {
       return false;
     }
   }
 
-  // Get open.mp extra information (discord, banners, etc.)
   public async getOpenMPExtraInfo(
     server: ServerConfig,
     guildId: string = 'unknown',
@@ -567,7 +578,6 @@ export class SAMPQuery {
 
     const results: Partial<SAMPFullInfo> = {};
 
-    // Get basic info first
     const info = await this.getServerInfo(server, guildId);
     if (info) {
       results.info = info;
@@ -582,11 +592,9 @@ export class SAMPQuery {
       `Basic info: ${results.info.hostname} (${results.info.players}/${results.info.maxplayers})`
     );
 
-    // Check if it's open.mp
     results.isOpenMP = await this.isOpenMP(server, guildId);
     console.log(`Server type: ${results.isOpenMP ? 'open.mp' : 'SA:MP'}`);
 
-    // Get open.mp extra info if applicable
     if (results.isOpenMP) {
       results.extraInfo = await this.getOpenMPExtraInfo(server, guildId);
       if (results.extraInfo) {
@@ -596,7 +604,6 @@ export class SAMPQuery {
       }
     }
 
-    // Get additional data
     try {
       results.rules = await this.getServerRules(server, guildId);
       console.log(
@@ -615,7 +622,6 @@ export class SAMPQuery {
       results.ping = -1;
     }
 
-    // Get player lists for smaller servers
     if (results.info.players > 0 && results.info.players <= 100) {
       try {
         results.players = await this.getPlayers(server, guildId);
