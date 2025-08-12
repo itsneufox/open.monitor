@@ -15,9 +15,15 @@ const addresses = process.env.VALKEY_HOSTS.split(",").map((host) => {
 export let client: GlideClient;
 
 (async () => {
-    client = await GlideClient.createClient({
-        addresses: addresses,
-        useTLS: process.env.VALKEY_USE_TLS === "true",
-        clientName: "openmonitor",
-    });
+    try {
+        client = await GlideClient.createClient({
+            addresses: addresses,
+            useTLS: process.env.VALKEY_USE_TLS === "true",
+            clientName: "openmonitor",
+        });
+        console.log('Valkey client connected successfully');
+    } catch (error) {
+        console.error('Failed to connect to Valkey:', error);
+        process.exit(1);
+    }
 })();
