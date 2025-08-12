@@ -7,10 +7,8 @@ import KeyvMysql from '@keyv/mysql';
 import { CustomClient } from './types';
 import { RateLimitManager } from './utils/rateLimitManager';
 
-// Load environment variables
 config();
 
-// Validate required environment variables
 const requiredEnvVars = ['TOKEN', 'CLIENT_ID', 'DATABASE_URL'];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
@@ -22,15 +20,12 @@ if (missingEnvVars.length > 0) {
   process.exit(1);
 }
 
-// Initialize client with required intents
 const client = new Client({
   intents: ['Guilds', 'GuildVoiceStates'],
 }) as CustomClient;
 
-// Initialize rate limit manager
 client.rateLimitManager = new RateLimitManager();
 
-// Set up database collections
 try {
   const mysqlAdapter = new KeyvMysql(process.env.DATABASE_URL!);
 
@@ -39,13 +34,11 @@ try {
   const maxPlayers = new Keyv({ store: mysqlAdapter, namespace: 'maxplayers' });
   const uptimes = new Keyv({ store: mysqlAdapter, namespace: 'uptimes' });
 
-  // Add error handlers for database connections
   const databases = { intervals, servers, maxPlayers, uptimes };
   Object.entries(databases).forEach(([name, db]) => {
     db.on('error', err => console.error(`Database error (${name}):`, err));
   });
 
-  // Attach databases to client
   client.intervals = intervals;
   client.servers = servers;
   client.maxPlayers = maxPlayers;
@@ -58,7 +51,6 @@ try {
   process.exit(1);
 }
 
-// File loading helper
 function getScriptFiles(directoryPath: string): string[] {
   if (!fs.existsSync(directoryPath)) return [];
 
@@ -85,7 +77,6 @@ function getScriptFiles(directoryPath: string): string[] {
   }
 }
 
-// Load commands
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'commands');
 
@@ -117,7 +108,6 @@ for (const file of commandFiles) {
   }
 }
 
-// Load events
 const eventsPath = path.join(__dirname, 'events');
 
 if (!fs.existsSync(eventsPath)) {
@@ -150,7 +140,6 @@ for (const file of eventFiles) {
   }
 }
 
-// Deploy slash commands
 import { REST, Routes } from 'discord.js';
 const rest = new REST().setToken(process.env.TOKEN!);
 
@@ -169,7 +158,6 @@ const rest = new REST().setToken(process.env.TOKEN!);
   }
 })();
 
-// Simple rate limit monitoring
 client.rest.on('rateLimited', rateLimitInfo => {
   console.warn('Rate limit hit:', {
     timeToReset: rateLimitInfo.timeToReset,
@@ -179,13 +167,11 @@ client.rest.on('rateLimited', rateLimitInfo => {
   });
 });
 
-// Monitor invalid requests
 client.on('invalidRequestWarning', data => {
   console.warn(
     `Invalid requests: ${data.count}/10000 (${data.remainingTime}ms remaining)`
   );
 
-  // Only log when approaching the limit
   if (data.count > 8000) {
     console.error(
       `⚠️  Approaching invalid request limit! Count: ${data.count}/10000`
@@ -194,7 +180,6 @@ client.on('invalidRequestWarning', data => {
   }
 });
 
-// Cleanup old rate limit entries every hour
 setInterval(() => {
   try {
     const { SecurityValidator } = require('./utils/securityValidator');
@@ -202,9 +187,8 @@ setInterval(() => {
   } catch (error) {
     console.error('Error during rate limit cleanup:', error);
   }
-}, 3600000); // 1 hour
+}, 3600000);
 
-// Handle process termination gracefully
 process.on('SIGINT', async () => {
   console.log('\nShutting down gracefully...');
   try {
@@ -226,8 +210,15 @@ process.on('uncaughtException', error => {
   process.exit(1);
 });
 
-// Login to Discord
-client.login(process.env.TOKEN).catch(error => {
+client.login(process.env.TOKEN).then(async () => {
+  try {
+    const { valkeyReady } = await import('./utils/valkey');
+    await valkeyReady;
+    console.log('All systems ready!');
+  } catch (error) {
+    console.warn('Valkey not available, continuing without cache');
+  }
+}).catch(error => {
   console.error('Failed to login to Discord:', error);
   process.exit(1);
 });
