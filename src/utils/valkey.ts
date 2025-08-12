@@ -1,12 +1,5 @@
 import { GlideClient } from "@valkey/valkey-glide";
 
-// Parse process.env.VALKEY_HOSTS
-/**
- * #Valkey config
-#Each replica is separated by commas
-#Format is IP:port
- */
-
 if (process.env.VALKEY_HOSTS == undefined) throw new Error("VALKEY_HOSTS is not defined in environment variables");
 if (process.env.VALKEY_USE_TLS == undefined) throw new Error("VALKEY_USE_TLS is not defined in environment variables");
 
