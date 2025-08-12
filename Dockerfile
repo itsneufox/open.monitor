@@ -4,9 +4,7 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# Install build tools and libraries needed for native modules like canvas
 RUN apk add --no-cache python3 make g++ libc6-compat pkgconfig pixman-dev cairo-dev pango-dev giflib-dev \
-    # Add font packages
     fontconfig ttf-dejavu ttf-liberation ttf-opensans
 
 RUN npm ci && npm cache clean --force

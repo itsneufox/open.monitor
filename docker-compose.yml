@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   mysql:
     image: mysql:8.0
@@ -12,8 +11,6 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./backups:/backups
-    # ports:
-      # - "3306:3306"
     networks:
       - openmonitor-network
     command: --default-authentication-plugin=mysql_native_password
@@ -21,15 +18,15 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 60s
 
   valkey:
     image: valkey/valkey:8.1.3-alpine
     container_name: openmonitor-valkey
     restart: unless-stopped
     volumes:
-      - ./conf/valkey.conf:/etc/valkey/valkey.conf
+      - valkey_data:/data
     networks:
       - openmonitor-network
     healthcheck:
@@ -45,16 +42,18 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      valkey:
+        condition: service_healthy
     environment:
       - TOKEN=${TOKEN}
       - CLIENT_ID=${CLIENT_ID}
       - DATABASE_URL=mysql://openmonitor:${MYSQL_PASSWORD}@mysql:3306/openmonitor
       - OWNER_ID=${OWNER_ID}
-      - NODE_ENV=${NODE_ENV}
-      - LOG_LEVEL=${LOG_LEVEL}
-      - VALKEY_HOSTS=${VALKEY_HOSTS}
-      - VALKEY_USE_TLS=${VALKEY_USE_TLS}
-      - VALKEY_KEY_EXPIRY_SECONDS=${VALKEY_KEY_EXPIRY_SECONDS}
+      - NODE_ENV=production
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - VALKEY_HOSTS=valkey:6379
+      - VALKEY_USE_TLS=false
+      - VALKEY_KEY_EXPIRY_SECONDS=${VALKEY_KEY_EXPIRY_SECONDS:-540}
     volumes:
       - ./logs:/app/logs
     networks:
@@ -62,6 +61,8 @@ services:
 
 volumes:
   mysql_data:
+    driver: local
+  valkey_data:
     driver: local
 
 networks:
