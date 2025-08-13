@@ -69,6 +69,13 @@ export async function execute(client: CustomClient): Promise<void> {
         const activeServer = servers.find(s => s.id === interval.activeServerId);
         if (!activeServer) continue;
 
+        const { SecurityValidator } = require('./utils/securityValidator');
+        const banStatus = SecurityValidator.isIPBanned(activeServer.ip);
+        if (banStatus.banned) {
+          console.log(`Skipping monitoring for banned IP: ${activeServer.ip} - ${banStatus.reason}`);
+          continue;
+        }
+
         const statusUpdateDue = now >= (interval.next || 0);
 
         const lastVoiceUpdate = interval.lastVoiceUpdate || 0;
