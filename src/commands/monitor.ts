@@ -283,7 +283,7 @@ async function handleSetup(
         setTimeout(async () => {
           try {
             const serverAddress = `${activeServer.ip}:${activeServer.port}`;
-            const newName = `🌐 ${serverAddress}`;
+            const newName = `IP: ${serverAddress}`;
 
             await serverIpChannel.setName(newName);
             console.log(`✅ Set server IP channel: ${newName}`);
@@ -310,7 +310,7 @@ async function handleSetup(
         setTimeout(async () => {
           try {
             const serverAddress = `${activeServer.ip}:${activeServer.port}`;
-            const newName = `🌐 ${serverAddress}`;
+            const newName = `IP: ${serverAddress}`;
 
             await serverIpChannel.setName(newName);
           } catch (error) {

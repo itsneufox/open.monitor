@@ -334,7 +334,7 @@ async function handleAdd(
             .catch(() => null);
           if (serverIpChannel && 'setName' in serverIpChannel) {
             const channelNameValidation = InputValidator.validateChannelName(
-              `Server ${ip}:${port}`
+              `IP: ${ip}:${port}`
             );
             if (channelNameValidation.valid) {
               await (serverIpChannel as any).setName(
@@ -609,7 +609,7 @@ async function handleActivate(
         .catch(() => null);
       if (serverIpChannel && 'setName' in serverIpChannel) {
         await (serverIpChannel as any).setName(
-          `Server ${server.ip}:${server.port}`
+          `IP: ${server.ip}:${server.port}`
         );
       }
     } catch (error) {
@@ -731,7 +731,7 @@ async function handleRemove(
                 .catch(() => null);
               if (serverIpChannel && 'setName' in serverIpChannel) {
                 await (serverIpChannel as any).setName(
-                  `Server ${newActiveServer.ip}:${newActiveServer.port}`
+                  `IP: ${newActiveServer.ip}:${newActiveServer.port}`
                 );
               }
             } catch (error) {
