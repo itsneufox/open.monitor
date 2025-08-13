@@ -45,7 +45,7 @@ class SecurityValidator {
 
     const maxQueriesPerHour = 120;
     const maxGuilds = 10;
-    const cooldownMs = isMonitoringCycle ? 250000 : 10000;;
+    const cooldownMs = isMonitoringCycle ? 10 : 10000;;
 
     if (
       data.lastHour.length >= maxQueriesPerHour ||
