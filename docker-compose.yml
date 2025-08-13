@@ -55,7 +55,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - VALKEY_HOSTS=valkey:6379
       - VALKEY_USE_TLS=false
-      - VALKEY_KEY_EXPIRY_SECONDS=${VALKEY_KEY_EXPIRY_SECONDS:-540}
+      - VALKEY_KEY_EXPIRY_SECONDS=${VALKEY_KEY_EXPIRY_SECONDS:-300}
     volumes:
       - ./logs:/app/logs
     networks:
