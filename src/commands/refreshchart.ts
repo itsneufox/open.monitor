@@ -7,6 +7,7 @@ import {
 } from 'discord.js';
 import { CustomClient } from '../types';
 import { getChart, getRoleColor, getPlayerCount } from '../utils';
+import { getServerDataKey } from '../types';
 
 export const data = new SlashCommandBuilder()
     .setName('refreshchart')
@@ -180,7 +181,10 @@ async function generateChartForGuild(client: CustomClient, guildId: string, guil
         throw new Error('Guild not found');
     }
 
-    const data = await client.maxPlayers.get(activeServer.id);
+    // FIX: Use consistent key format
+    const serverDataKey = getServerDataKey(guildId, activeServer.id);
+    const data = await client.maxPlayers.get(serverDataKey);
+    
     if (!data || !data.days || data.days.length < 2) {
         throw new Error('Insufficient chart data (need at least 2 days)');
     }
@@ -194,7 +198,6 @@ async function generateChartForGuild(client: CustomClient, guildId: string, guil
 
         const currentValue = currentInfo.isOnline ? currentInfo.playerCount : 0;
 
-        // Find today's data point
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const todayTimestamp = today.getTime();
@@ -206,23 +209,21 @@ async function generateChartForGuild(client: CustomClient, guildId: string, guil
         });
 
         if (todayIndex !== -1) {
-            // Update existing today's entry with current value if higher
             data.days[todayIndex]!.value = Math.max(data.days[todayIndex]!.value, currentValue);
-            data.days[todayIndex]!.date = Date.now(); // Update timestamp
+            data.days[todayIndex]!.date = Date.now();
         } else {
-            // Add today's entry
             data.days.push({
                 value: currentValue,
                 date: Date.now(),
             });
         }
 
-        // Keep only last 30 days
         if (data.days.length > 30) {
             data.days = data.days.slice(-30);
         }
 
-        await client.maxPlayers.set(activeServer.id, data);
+        // FIX: Use consistent key format
+        await client.maxPlayers.set(serverDataKey, data);
         console.log(`Updated chart data with current player count: ${currentValue}`);
 
     } catch (error) {
@@ -237,7 +238,6 @@ async function generateChartForGuild(client: CustomClient, guildId: string, guil
     const color = getRoleColor(guild);
     const chart = await getChart(data, color);
 
-    // Delete old chart if exists
     if (data.msg) {
         try {
             const oldMessage = await chartChannel.messages.fetch(data.msg);
@@ -248,13 +248,12 @@ async function generateChartForGuild(client: CustomClient, guildId: string, guil
         }
     }
 
-    // Send new chart
     const msg = await chartChannel.send({
         content: `**Daily Chart for ${activeServer.name}** (Refreshed)`,
         files: [chart],
     });
 
-    // Update message ID
     data.msg = msg.id;
-    await client.maxPlayers.set(activeServer.id, data);
+    // FIX: Use consistent key format
+    await client.maxPlayers.set(serverDataKey, data);
 }

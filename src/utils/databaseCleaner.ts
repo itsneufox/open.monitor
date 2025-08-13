@@ -25,9 +25,9 @@ class DatabaseCleaner {
     }
 
     try {
-      const serverDataKey = getServerDataKey(guildId, serverId);
-      await this.client.uptimes.delete(serverDataKey);
-      console.log(`Removed uptime data for ${serverDataKey}`);
+      const uptimeDataKey = getServerDataKey(guildId, serverId);
+      await this.client.uptimes.delete(uptimeDataKey);
+      console.log(`Removed uptime data for ${uptimeDataKey}`);
     } catch (error) {
       const errorMsg = `Failed to remove uptime data: ${error}`;
       errors.push(errorMsg);

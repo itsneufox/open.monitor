@@ -1,4 +1,4 @@
-import { ServerConfig } from '../types';
+import { ServerConfig, getServerDataKey } from '../types';
 import { SAMPInfo, SAMPQuery } from './sampQuery';
 
 interface PlayerCountResult {
@@ -18,10 +18,13 @@ export async function getPlayerCount(
   ignoreCache: boolean = false
 ): Promise<PlayerCountResult> {
   try {
+    // Declare cacheKey at function level
+    const cacheKey = getServerDataKey(guildId, server.id);
+    
     if (!ignoreCache) {
       try {
         const { client: valkey } = await import('./valkey');
-        let cachedInfo = await valkey.get(server.id);
+        let cachedInfo = await valkey.get(cacheKey);
         if (cachedInfo) {
           const info: SAMPInfo = JSON.parse(cachedInfo as string);
           if (info) {
@@ -54,8 +57,8 @@ export async function getPlayerCount(
     try {
       const { client: valkey } = await import('./valkey');
       const { TimeUnit } = await import('@valkey/valkey-glide');
-      
-      await valkey.set(server.id, JSON.stringify(info), {
+     
+      await valkey.set(cacheKey, JSON.stringify(info), {
         expiry: {
           type: TimeUnit.Seconds,
           count: Number(process.env.VALKEY_KEY_EXPIRY_SECONDS) || 60

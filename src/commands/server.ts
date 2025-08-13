@@ -219,6 +219,13 @@ async function handleAdd(
     }
   }
 
+  if (ip.startsWith('127.') || ip === '::1') {
+    await interaction.editReply(
+      '❌ Localhost addresses (127.x.x.x and ::1) are not allowed.'
+    );
+    return;
+  }
+
   // Check rate limiting for this IP
   if (!SecurityValidator.canQueryIP(ip, interaction.guildId!)) {
     await interaction.editReply(
@@ -689,9 +696,10 @@ async function handleRemove(
   }
 
   try {
+    const serverDataKey = getServerDataKey(interaction.guildId!, server.id);
     // Get current data for summary before deletion
-    const chartData = await client.maxPlayers.get(server.id);
-    const uptimeData = await client.uptimes.get(server.id);
+    const chartData = await client.maxPlayers.get(serverDataKey);
+    const uptimeData = await client.uptimes.get(serverDataKey);
     const intervalConfig = await client.intervals.get(interaction.guildId!);
 
     // Check if this is the active server

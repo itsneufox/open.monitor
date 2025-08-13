@@ -193,7 +193,7 @@ async function performGuildUpdate(
   }
 
   // Get player count and update max players
-  let chartData = await client.maxPlayers.get(activeServer.id);
+  let chartData = await client.maxPlayers.get(getServerDataKey(guildId, activeServer.id));
   if (!chartData) {
     chartData = {
       maxPlayersToday: 0,
@@ -213,7 +213,7 @@ async function performGuildUpdate(
   chartData.name = info.name;
   chartData.maxPlayers = info.maxPlayers;
 
-await client.maxPlayers.set(getServerDataKey(guildId, activeServer.id), chartData);
+  await client.maxPlayers.set(getServerDataKey(guildId, activeServer.id), chartData);
 
   // Update uptime stats
   if (info.isOnline) {
@@ -221,7 +221,8 @@ await client.maxPlayers.set(getServerDataKey(guildId, activeServer.id), chartDat
   } else {
     onlineStats.downtime++;
   }
-  await client.uptimes.set(activeServer.id, onlineStats);
+  const serverDataKey = getServerDataKey(guildId, activeServer.id);
+  await client.uptimes.set(serverDataKey, onlineStats);
 
   // Update status channel
   if (interval.statusChannel) {
