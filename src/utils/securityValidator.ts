@@ -1,17 +1,20 @@
-// utils/securityValidator.ts
 import { ServerConfig } from '../types';
 
 interface IPQueryData {
   lastHour: number[];
-  guilds: Map<string, number>; // guildId -> lastQuery timestamp
+  guilds: Map<string, number>;
   totalQueries: number;
+  failures: number;
+  lastFailure: number;
+  banned: boolean;
+  banReason?: string;
+  bannedAt?: number;
 }
 
 class SecurityValidator {
   private static ipQueryLimits = new Map<string, IPQueryData>();
 
   static validateServerIP(ip: string): boolean {
-    // Allow all IPs
     return true;
   }
 
@@ -24,41 +27,43 @@ class SecurityValidator {
       lastHour: [],
       guilds: new Map(),
       totalQueries: 0,
+      failures: 0,
+      lastFailure: 0,
+      banned: false,
     };
 
     const now = Date.now();
 
-    // Clean up old queries from last hour
+    if (data.banned) {
+      console.warn(`IP ${targetIP} is banned: ${data.banReason}`);
+      return false;
+    }
+
     data.lastHour = data.lastHour.filter(time => time > now - 3600000);
 
-    // Get the last query time for this specific guild
     const lastGuildQuery = data.guilds.get(guildId) || 0;
 
-    // Different limits based on context
     const maxQueriesPerHour = 60;
     const maxGuilds = 10;
-    const cooldownMs = isMonitoringCycle ? 15 : 10000; // 15ms for monitoring, 10s for manual
+    const cooldownMs = isMonitoringCycle ? 15 : 10000;
 
-    // Check global limits
     if (
       data.lastHour.length >= maxQueriesPerHour ||
       data.guilds.size > maxGuilds
     ) {
       console.warn(
-        `🚨 Global limit reached for ${targetIP}: queries=${data.lastHour.length}/${maxQueriesPerHour}, guilds=${data.guilds.size}/${maxGuilds}`
+        `Global limit reached for ${targetIP}: queries=${data.lastHour.length}/${maxQueriesPerHour}, guilds=${data.guilds.size}/${maxGuilds}`
       );
       return false;
     }
 
-    // Check per-guild cooldown
     if (now - lastGuildQuery < cooldownMs) {
       console.warn(
-        `🚨 Guild cooldown active for ${targetIP} (guild: ${guildId}): lastQuery=${now - lastGuildQuery}ms ago (cooldown: ${cooldownMs}ms, monitoring: ${isMonitoringCycle})`
+        `Guild cooldown active for ${targetIP} (guild: ${guildId}): lastQuery=${now - lastGuildQuery}ms ago (cooldown: ${cooldownMs}ms, monitoring: ${isMonitoringCycle})`
       );
       return false;
     }
 
-    // Update tracking data
     data.lastHour.push(now);
     data.guilds.set(guildId, now);
     data.totalQueries++;
@@ -80,7 +85,6 @@ class SecurityValidator {
       return false;
     }
 
-    // Skip IP validation for domain names
     const isDomain = !/^\d+\.\d+\.\d+\.\d+$/.test(server.ip);
     if (!isDomain) {
       const ipParts = [data[4] ?? 0, data[5] ?? 0, data[6] ?? 0, data[7] ?? 0];
@@ -112,13 +116,220 @@ class SecurityValidator {
     };
   }
 
-  // Add method to clear rate limits for debugging
+  static recordQueryFailure(targetIP: string, error: Error, guildId?: string): void {
+    const data = this.ipQueryLimits.get(targetIP) ?? {
+      lastHour: [],
+      guilds: new Map(),
+      totalQueries: 0,
+      failures: 0,
+      lastFailure: 0,
+      banned: false,
+    };
+
+    data.failures++;
+    data.lastFailure = Date.now();
+
+    if (guildId) {
+      this.logErrorToGuild(targetIP, error, guildId, data.failures);
+    }
+
+    this.ipQueryLimits.set(targetIP, data);
+  }
+
+  private static async logErrorToGuild(
+    targetIP: string, 
+    error: Error, 
+    guildId: string, 
+    failureCount: number
+  ): Promise<void> {
+    try {
+      if (guildId !== '1309527094476275782') return;
+
+      const { Client } = require('discord.js');
+      const client = require('../index').default;
+      
+      if (!client || !client.channels) return;
+
+      const channelId = '1405066715687026718';
+      const channel = await client.channels.fetch(channelId).catch(() => null);
+      
+      if (!channel || !('send' in channel)) return;
+
+      const errorType = this.getErrorType(error);
+
+      const embed = {
+        color: 0xff9500,
+        title: 'Server Query Error',
+        fields: [
+          {
+            name: 'Server IP',
+            value: `\`${targetIP}\``,
+            inline: true,
+          },
+          {
+            name: 'Error Type',
+            value: errorType,
+            inline: true,
+          },
+          {
+            name: 'Failure Count',
+            value: `${failureCount}`,
+            inline: true,
+          },
+          {
+            name: 'Error Details',
+            value: `\`${error.message}\``,
+            inline: false,
+          },
+        ],
+        timestamp: new Date().toISOString(),
+      };
+
+      if (error.message.includes('ENOTFOUND')) {
+        embed.fields.push({
+          name: 'Recommendation',
+          value: 'Check if the server IP/domain is correct. This might be a typo in the server configuration.',
+          inline: false,
+        });
+      } else if (error.message.includes('ECONNREFUSED')) {
+        embed.fields.push({
+          name: 'Recommendation',
+          value: 'Server is refusing connections. Check if the port is correct and the server is running.',
+          inline: false,
+        });
+      } else if (error.message.includes('timeout')) {
+        embed.fields.push({
+          name: 'Recommendation',
+          value: 'Server might be offline, slow to respond, or behind a firewall blocking queries.',
+          inline: false,
+        });
+      }
+
+      await channel.send({ embeds: [embed] });
+    } catch (logError) {
+      console.error('Failed to log error to guild channel:', logError);
+    }
+  }
+
+  private static getErrorType(error: Error): string {
+    if (error.message.includes('ENOTFOUND')) {
+      return 'DNS Resolution Failed';
+    }
+    if (error.message.includes('ECONNREFUSED')) {
+      return 'Connection Refused';
+    }
+    if (error.message.includes('ETIMEDOUT')) {
+      return 'Connection Timeout';
+    }
+    if (error.message.includes('timeout')) {
+      return 'Query Timeout';
+    }
+    return 'Unknown Error';
+  }
+
+static isIPBanned(targetIP: string): { banned: boolean; reason?: string } {
+  const data = this.ipQueryLimits.get(targetIP);
+  if (!data || !data.banned) {
+    return { banned: false };
+  }
+
+  const result: { banned: boolean; reason?: string } = { banned: true };
+  if (data.banReason) {
+    result.reason = data.banReason;
+  }
+  return result;
+}
+
+  static banIP(targetIP: string, reason: string): { success: boolean; error?: string } {
+    let data = this.ipQueryLimits.get(targetIP);
+    
+    if (!data) {
+      data = {
+        lastHour: [],
+        guilds: new Map(),
+        totalQueries: 0,
+        failures: 0,
+        lastFailure: 0,
+        banned: false,
+      };
+    }
+
+    if (data.banned) {
+      return { success: false, error: 'IP is already banned' };
+    }
+
+    data.banned = true;
+    data.bannedAt = Date.now();
+    data.banReason = reason;
+
+    this.ipQueryLimits.set(targetIP, data);
+    console.log(`Manually banned IP: ${targetIP} - Reason: ${reason}`);
+
+    return { success: true };
+  }
+
+static unbanIP(targetIP: string): { success: boolean; error?: string; previousReason?: string } {
+  const data = this.ipQueryLimits.get(targetIP);
+  
+  if (!data || !data.banned) {
+    return { success: false, error: 'IP is not banned' };
+  }
+
+  const previousReason = data.banReason;
+  data.banned = false;
+  data.failures = 0;
+  delete data.banReason;
+  delete data.bannedAt;
+
+  this.ipQueryLimits.set(targetIP, data);
+  console.log(`Manually unbanned IP: ${targetIP}`);
+
+  const result: { success: boolean; error?: string; previousReason?: string } = { success: true };
+  if (previousReason) {
+    result.previousReason = previousReason;
+  }
+  return result;
+}
+
+  static getBannedIPs(): Array<{ ip: string; reason: string; failures: number; bannedAt: number }> {
+    const banned: Array<{ ip: string; reason: string; failures: number; bannedAt: number }> = [];
+
+    for (const [ip, data] of this.ipQueryLimits.entries()) {
+      if (data.banned) {
+        banned.push({
+          ip,
+          reason: data.banReason || 'Unknown',
+          failures: data.failures,
+          bannedAt: data.bannedAt || 0,
+        });
+      }
+    }
+
+    return banned.sort((a, b) => b.bannedAt - a.bannedAt);
+  }
+
+  static clearAllBans(): number {
+    let count = 0;
+
+    for (const [ip, data] of this.ipQueryLimits.entries()) {
+      if (data.banned) {
+        data.banned = false;
+        data.failures = 0;
+        delete data.banReason;
+        delete data.bannedAt;
+        count++;
+      }
+    }
+
+    console.log(`Cleared ${count} banned IPs`);
+    return count;
+  }
+
   static clearRateLimits(): void {
     this.ipQueryLimits.clear();
     console.log('Rate limits cleared');
   }
 
-  // Add method to get current rate limit stats
   static getRateLimitStats(): Record<string, any> {
     const stats: Record<string, any> = {};
     for (const [ip, data] of this.ipQueryLimits.entries()) {
@@ -126,6 +337,10 @@ class SecurityValidator {
         queriesInLastHour: data.lastHour.length,
         totalGuilds: data.guilds.size,
         totalQueries: data.totalQueries,
+        failures: data.failures,
+        banned: data.banned,
+        banReason: data.banReason,
+        bannedAt: data.bannedAt,
         guilds: Array.from(data.guilds.entries()).map(
           ([guildId, lastQuery]) => ({
             guildId,
@@ -137,27 +352,24 @@ class SecurityValidator {
     return stats;
   }
 
-  // Cleanup method to remove old guild entries periodically
   static cleanupOldEntries(): void {
     const now = Date.now();
     const oneHourAgo = now - 3600000;
 
     for (const [ip, data] of this.ipQueryLimits.entries()) {
-      // Remove guilds that haven't queried in the last hour
       for (const [guildId, lastQuery] of data.guilds.entries()) {
         if (lastQuery < oneHourAgo) {
           data.guilds.delete(guildId);
         }
       }
 
-      // Remove the entire IP entry if no recent activity
-      if (data.lastHour.length === 0 && data.guilds.size === 0) {
+      if (data.lastHour.length === 0 && data.guilds.size === 0 && !data.banned) {
         this.ipQueryLimits.delete(ip);
       }
     }
 
     console.log(
-      `🧹 Rate limit cleanup completed. Active IPs: ${this.ipQueryLimits.size}`
+      `Rate limit cleanup completed. Active IPs: ${this.ipQueryLimits.size}`
     );
   }
 }
