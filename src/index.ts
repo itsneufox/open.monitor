@@ -77,6 +77,65 @@ function getScriptFiles(directoryPath: string): string[] {
   }
 }
 
+function loadCommandsRecursively(directoryPath: string): any[] {
+  const commands: any[] = [];
+
+  if (!fs.existsSync(directoryPath)) {
+    return commands;
+  }
+
+  const items = fs.readdirSync(directoryPath, { withFileTypes: true });
+
+  for (const item of items) {
+    const itemPath = path.join(directoryPath, item.name);
+
+    if (item.isDirectory()) {
+      const indexPath = path.join(itemPath, 'index');
+      const indexTsPath = indexPath + '.ts';
+      const indexJsPath = indexPath + '.js';
+
+      let indexFile = null;
+      if (fs.existsSync(indexTsPath)) {
+        indexFile = indexTsPath;
+      } else if (fs.existsSync(indexJsPath)) {
+        indexFile = indexJsPath;
+      }
+
+      if (indexFile) {
+        try {
+          const command = require(indexFile);
+          if ('data' in command && 'execute' in command) {
+            commands.push(command);
+            console.log(`  Loaded command: ${command.data.name} (from ${item.name}/)`);
+          }
+        } catch (error) {
+          console.error(`  Failed to load command from ${item.name}/index:`, error);
+        }
+      }
+    } else if (item.name.endsWith('.ts') || item.name.endsWith('.js')) {
+      if (item.name.endsWith('.d.ts')) continue;
+
+      const nameWithoutExt = item.name.replace(/\.(ts|js)$/, '');
+      if (nameWithoutExt === 'monitor' || nameWithoutExt === 'server') {
+        console.log(`  Skipping old file: ${item.name} (using directory version instead)`);
+        continue;
+      }
+
+      try {
+        const command = require(itemPath);
+        if ('data' in command && 'execute' in command) {
+          commands.push(command);
+          console.log(`  Loaded command: ${command.data.name}`);
+        }
+      } catch (error) {
+        console.error(`  Failed to load command ${item.name}:`, error);
+      }
+    }
+  }
+
+  return commands;
+}
+
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'commands');
 
@@ -85,28 +144,22 @@ if (!fs.existsSync(commandsPath)) {
   process.exit(1);
 }
 
-const commandFiles = getScriptFiles(commandsPath);
+console.log('Loading commands...');
+const loadedCommands = loadCommandsRecursively(commandsPath);
 const commands: any[] = [];
 
-console.log('Loading commands...');
-for (const file of commandFiles) {
-  try {
-    const filePath = path.join(commandsPath, file);
-    const command = require(filePath);
-
-    if ('data' in command && 'execute' in command) {
-      client.commands.set(command.data.name, command);
-      commands.push(command.data.toJSON());
-      console.log(`  Loaded command: ${command.data.name}`);
-    } else {
-      console.warn(
-        `  Command at ${filePath} is missing required "data" or "execute" property.`
-      );
-    }
-  } catch (error) {
-    console.error(`  Failed to load command ${file}:`, error);
+for (const command of loadedCommands) {
+  const existingCommand = commands.find(cmd => cmd.name === command.data.name);
+  if (existingCommand) {
+    console.warn(`  Skipping duplicate command: ${command.data.name}`);
+    continue;
   }
+
+  client.commands.set(command.data.name, command);
+  commands.push(command.data.toJSON());
 }
+
+console.log(`Loaded ${commands.length} commands total`);
 
 const eventsPath = path.join(__dirname, 'events');
 
@@ -174,7 +227,7 @@ client.on('invalidRequestWarning', data => {
 
   if (data.count > 8000) {
     console.error(
-      `⚠️  Approaching invalid request limit! Count: ${data.count}/10000`
+      `Approaching invalid request limit! Count: ${data.count}/10000`
     );
     console.error('Check for permission errors or malformed requests');
   }
