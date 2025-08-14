@@ -58,13 +58,8 @@ export async function handleSetup(
     const manualPlayerCountChannel = interaction.options.getChannel('player_count_channel') as VoiceChannel | null;
     const manualServerIpChannel = interaction.options.getChannel('server_ip_channel') as VoiceChannel | null;
 
-    if (!autoTextChannels && !manualStatusChannel) {
-        await interaction.editReply('You must provide a status channel when auto_text_channels is disabled.');
-        return;
-    }
-
-    if (!autoVoiceChannels && !manualPlayerCountChannel && !manualServerIpChannel) {
-        await interaction.editReply('You must provide at least one voice channel when auto_voice_channels is disabled.');
+    if (!autoTextChannels && !autoVoiceChannels && !manualStatusChannel && !manualChartChannel && !manualPlayerCountChannel && !manualServerIpChannel) {
+        await interaction.editReply('You must either enable auto-creation or provide at least one channel manually.');
         return;
     }
 
@@ -291,6 +286,14 @@ export async function handleSetup(
         }
         if (createdChannels.length > 0) {
             embed.addFields({ name: 'Created', value: createdChannels.join('\n'), inline: false });
+        }
+
+        if (!finalStatusChannel && enableMonitoring) {
+            embed.addFields({
+                name: 'Limited Monitoring',
+                value: 'Monitoring enabled but no status channel configured. Only voice channels will update.',
+                inline: false,
+            });
         }
 
         embed.addFields({
