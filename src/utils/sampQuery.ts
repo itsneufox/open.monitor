@@ -1,6 +1,6 @@
 import * as dgram from 'dgram';
 import * as iconv from 'iconv-lite';
-import { ServerConfig } from '../types';
+import { ServerConfig, ServerMetadata } from '../types';
 import { SecurityValidator } from './securityValidator';
 
 interface SAMPInfo {
@@ -73,6 +73,86 @@ export class SAMPQuery {
       return decoded.trim();
     } catch (error) {
       return iconv.decode(buffer, 'latin1').trim();
+    }
+  }
+
+  public async getQuickStatus(
+    server: ServerConfig,
+    guildId: string = 'unknown'
+  ): Promise<{ players: number; isOnline: boolean; gamemode?: string } | null> {
+    const data = await this.query(server, 'i', guildId, undefined, true);
+    if (!data) return null;
+
+    const info = this.parseInfoResponse(data);
+    if (!info) return null;
+
+    return {
+      players: info.players,
+      isOnline: true,
+      gamemode: info.gamemode
+    };
+  }
+
+  public async getServerMetadata(
+    server: ServerConfig,
+    guildId: string = 'unknown'
+  ): Promise<ServerMetadata | null> {
+    try {
+      console.log(`Fetching full metadata for ${server.ip}:${server.port}`);
+
+      const info = await this.getServerInfo(server, guildId, false);
+      if (!info) return null;
+
+      const isOpenMP = await this.isOpenMP(server, guildId, false);
+
+      let version = 'Unknown';
+      let banner: string | undefined;
+      let logo: string | undefined;
+
+      if (isOpenMP) {
+        try {
+          const rules = await this.getServerRules(server, guildId, false);
+          version = rules.version || 'open.mp';
+
+          const extraInfo = await this.getOpenMPExtraInfo(server, guildId, false);
+          if (extraInfo) {
+            banner = extraInfo.darkBanner || extraInfo.lightBanner;
+            logo = extraInfo.logo;
+          }
+        } catch (error) {
+          console.log('Failed to get open.mp extras:', error);
+        }
+      } else {
+        try {
+          const rules = await this.getServerRules(server, guildId, false);
+          version = rules.version || rules.Ver || rules.v || 'SA:MP 0.3.7';
+        } catch (error) {
+          console.log('Failed to get SA:MP version:', error);
+        }
+      }
+
+      const metadata: ServerMetadata = {
+        hostname: info.hostname,
+        gamemode: info.gamemode,
+        language: info.language,
+        version,
+        isOpenMP,
+        maxPlayers: info.maxplayers,
+        lastUpdated: Date.now()
+      };
+
+      if (banner) {
+        metadata.banner = banner;
+      }
+      if (logo) {
+        metadata.logo = logo;
+      }
+
+      return metadata;
+
+    } catch (error) {
+      console.error('Error fetching server metadata:', error);
+      return null;
     }
   }
 

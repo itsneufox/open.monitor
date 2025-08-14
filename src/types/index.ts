@@ -51,6 +51,27 @@ export interface UptimeStats {
   downtime: number;
 }
 
+export interface ServerMetadata {
+  hostname: string;
+  gamemode: string;
+  language: string;
+  version: string;
+  isOpenMP: boolean;
+  maxPlayers: number;
+  banner?: string;
+  logo?: string;
+  lastUpdated: number;
+}
+
+export interface PlayerCountResult {
+  playerCount: number;
+  maxPlayers: number;
+  name: string;
+  isOnline: boolean;
+  isCached: boolean;
+  error?: string;
+}
+
 export interface GuildConfig {
   servers: ServerConfig[];
   interval?: IntervalConfig;

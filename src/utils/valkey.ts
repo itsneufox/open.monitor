@@ -27,7 +27,6 @@ export const valkeyReady = (async () => {
             clientName: "openmonitor",
         });
         
-        // Test the connection
         await client.ping();
         console.log('Valkey client connected successfully');
         return client;

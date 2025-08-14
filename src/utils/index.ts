@@ -7,3 +7,4 @@ export { RateLimitManager } from './rateLimitManager';
 export { SecurityValidator } from './securityValidator';
 export { InputValidator } from './inputValidator';
 export { TimezoneHelper } from './timezoneHelper';
+export { ServerMetadataCache } from './serverCache';

@@ -233,15 +233,6 @@ client.on('invalidRequestWarning', data => {
   }
 });
 
-setInterval(() => {
-  try {
-    const { SecurityValidator } = require('./utils/securityValidator');
-    SecurityValidator.cleanupOldEntries();
-  } catch (error) {
-    console.error('Error during rate limit cleanup:', error);
-  }
-}, 3600000);
-
 process.on('SIGINT', async () => {
   console.log('\nShutting down gracefully...');
   try {

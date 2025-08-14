@@ -1,8 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
 import { ServerConfig } from '../types';
-import { SAMPQuery } from './sampQuery';
-
-const sampQuery = new SAMPQuery();
+import { getPlayerCount } from './getPlayerCount';
 
 export async function getStatus(
   server: ServerConfig,
@@ -10,110 +8,88 @@ export async function getStatus(
   guildId: string = 'unknown',
   isMonitoring: boolean = false
 ): Promise<EmbedBuilder> {
-  let statusTitle = 'Server Status';
   const embed = new EmbedBuilder().setColor(color).setTimestamp();
 
   try {
-    const info = await sampQuery.getServerInfo(server, guildId, isMonitoring);
-    if (!info) {
+    const playerInfo = await getPlayerCount(server, guildId, isMonitoring);
+
+    if (!playerInfo.isOnline) {
+      const errorMsg = playerInfo.error || 'Server is offline or unreachable';
+      return embed
+        .setTitle('Server Status')
+        .setDescription(`**${server.name}**\n\`${server.ip}:${server.port}\`\n❌ ${errorMsg}`);
+    }
+
+    try {
+      const { ServerMetadataCache } = await import('./serverCache');
+      const metadata = await ServerMetadataCache.getMetadata(server, guildId, null as any);
+
+      const statusTitle = metadata?.isOpenMP ? 'open.mp Server Status' : 'SA:MP Server Status';
+
       embed
         .setTitle(statusTitle)
-        .setDescription(
-          `**${server.ip}:${server.port}**\n❌ Server is offline or unreachable`
+        .setDescription(`**${playerInfo.name}**\n\`${server.ip}:${server.port}\``)
+        .addFields(
+          { name: 'Players', value: `${playerInfo.playerCount}/${playerInfo.maxPlayers}`, inline: true },
+          { name: 'Status', value: '✅ Online', inline: true }
         );
+
+      if (metadata) {
+        embed.addFields(
+          { name: 'Gamemode', value: metadata.gamemode || 'Unknown', inline: true },
+          { name: 'Language', value: metadata.language || 'Unknown', inline: true },
+          { name: 'Version', value: metadata.version, inline: true },
+          { name: 'Password', value: '❓ Unknown', inline: true } // We don't query this anymore
+        );
+
+        if (metadata.banner) {
+          embed.setImage(metadata.banner);
+        }
+        if (metadata.logo) {
+          embed.setThumbnail(metadata.logo);
+        }
+
+        const cacheAge = Math.floor((Date.now() - metadata.lastUpdated) / (1000 * 60 * 60));
+        embed.setFooter({
+          text: `Server info cached ${cacheAge}h ago • Player count ${playerInfo.isCached ? 'cached' : 'live'}`
+        });
+      } else {
+        // No metadata available yet, show basic info
+        embed.addFields(
+          { name: 'Gamemode', value: '❓ Loading...', inline: true },
+          { name: 'Language', value: '❓ Loading...', inline: true },
+          { name: 'Version', value: '❓ Loading...', inline: true },
+          { name: 'Password', value: '❓ Unknown', inline: true }
+        );
+
+        embed.setFooter({
+          text: `Player count ${playerInfo.isCached ? 'cached' : 'live'} • Loading server details...`
+        });
+      }
+
+      return embed;
+    } catch (metaError) {
+      console.log('Could not get metadata, using basic status');
+
+      embed
+        .setTitle('Server Status')
+        .setDescription(`**${playerInfo.name}**\n\`${server.ip}:${server.port}\``)
+        .addFields(
+          { name: 'Players', value: `${playerInfo.playerCount}/${playerInfo.maxPlayers}`, inline: true },
+          { name: 'Status', value: '✅ Online', inline: true },
+          { name: 'Gamemode', value: '❓ Unknown', inline: true },
+          { name: 'Language', value: '❓ Unknown', inline: true },
+          { name: 'Version', value: '❓ Unknown', inline: true },
+          { name: 'Password', value: '❓ Unknown', inline: true }
+        );
+
       return embed;
     }
 
-    const isOpenMP = await sampQuery.isOpenMP(server, guildId, isMonitoring);
-    const rules = await sampQuery.getServerRules(server, guildId, isMonitoring);
-
-    let detectedVersion = 'Unknown';
-    let serverType = 'Unknown';
-
-    if (isOpenMP) {
-      statusTitle = 'open.mp Server Status';
-      serverType = 'open.mp';
-
-      if (rules.version) {
-        if (rules.version.includes('omp ') || rules.version.includes('open.mp')) {
-          detectedVersion = rules.version;
-        } else {
-          detectedVersion = `open.mp ${rules.version}`;
-        }
-      } else if (rules.allowed_clients) {
-        detectedVersion = 'open.mp';
-      } else {
-        detectedVersion = 'open.mp';
-      }
-    } else {
-      statusTitle = 'SA:MP Server Status';
-      serverType = 'SA:MP';
-
-      if (rules.version && !rules.version.includes('omp')) {
-        if (rules.version.includes('SA:MP') || rules.version.includes('0.3')) {
-          detectedVersion = rules.version;
-        } else {
-          detectedVersion = `SA:MP ${rules.version}`;
-        }
-      } else if (rules.Ver && !rules.Ver.includes('omp')) {
-        detectedVersion = rules.Ver.includes('SA:MP') ? rules.Ver : `SA:MP ${rules.Ver}`;
-      } else if (rules.v && !rules.v.includes('omp')) {
-        detectedVersion = rules.v.includes('SA:MP') ? rules.v : `SA:MP ${rules.v}`;
-      } else {
-        detectedVersion = 'SA:MP 0.3.7';
-      }
-    }
-
-    embed.setTitle(statusTitle);
-
-    if (isOpenMP) {
-      try {
-        const extraInfo = await sampQuery.getOpenMPExtraInfo(
-          server,
-          guildId,
-          isMonitoring
-        );
-        if (extraInfo) {
-          if (extraInfo.darkBanner) {
-            embed.setImage(extraInfo.darkBanner);
-          } else if (extraInfo.lightBanner) {
-            embed.setImage(extraInfo.lightBanner);
-          }
-
-          if (extraInfo.logo) {
-            embed.setThumbnail(extraInfo.logo);
-          }
-        }
-      } catch (error) {
-        console.log('Could not fetch open.mp extra info:', error);
-      }
-    }
-
-    embed.setDescription(
-      `**${info.hostname}**\n\`${server.ip}:${server.port}\``
-    );
-
-    embed.addFields(
-      {
-        name: 'Players',
-        value: `${info.players}/${info.maxplayers}`,
-        inline: true,
-      },
-      { name: 'Gamemode', value: info.gamemode || 'Unknown', inline: true },
-      { name: 'Language', value: info.language || 'Unknown', inline: true },
-      { name: 'Version', value: detectedVersion, inline: true },
-      { name: 'Password', value: info.password ? 'Yes' : 'No', inline: true },
-      { name: 'Status', value: '✅ Online', inline: true }
-    );
-
-    return embed;
   } catch (error) {
     console.error('Error getting server status:', error);
-    embed
-      .setTitle(statusTitle)
-      .setDescription(
-        `**${server.ip}:${server.port}**\n❌ Error querying server`
-      );
-    return embed;
+    return embed
+      .setTitle('Server Status')
+      .setDescription(`**${server.name}**\n\`${server.ip}:${server.port}\`\n❌ Bot experiencing issues - try again later`);
   }
 }

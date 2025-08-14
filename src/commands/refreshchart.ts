@@ -181,15 +181,12 @@ async function generateChartForGuild(client: CustomClient, guildId: string, guil
         throw new Error('Guild not found');
     }
 
-    // FIX: Use consistent key format
     const serverDataKey = getServerDataKey(guildId, activeServer.id);
     const data = await client.maxPlayers.get(serverDataKey);
-    
     if (!data || !data.days || data.days.length < 2) {
         throw new Error('Insufficient chart data (need at least 2 days)');
     }
 
-    // For manual refresh, update today's data with current player count
     try {
         const currentInfo = await client.rateLimitManager.executeWithRetry(
             () => getPlayerCount(activeServer, guildId, true),
@@ -215,6 +212,8 @@ async function generateChartForGuild(client: CustomClient, guildId: string, guil
             data.days.push({
                 value: currentValue,
                 date: Date.now(),
+                timezone: activeServer.timezone,
+                dayResetHour: activeServer.dayResetHour
             });
         }
 
@@ -222,7 +221,6 @@ async function generateChartForGuild(client: CustomClient, guildId: string, guil
             data.days = data.days.slice(-30);
         }
 
-        // FIX: Use consistent key format
         await client.maxPlayers.set(serverDataKey, data);
         console.log(`Updated chart data with current player count: ${currentValue}`);
 
@@ -254,6 +252,5 @@ async function generateChartForGuild(client: CustomClient, guildId: string, guil
     });
 
     data.msg = msg.id;
-    // FIX: Use consistent key format
     await client.maxPlayers.set(serverDataKey, data);
 }
