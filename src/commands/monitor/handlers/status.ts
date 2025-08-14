@@ -1,5 +1,5 @@
 import { ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from 'discord.js';
-import { CustomClient } from '../../../types';
+import { CustomClient, ServerConfig } from '../../../types';
 
 export async function handleStatus(
   interaction: ChatInputCommandInteraction,
@@ -27,7 +27,7 @@ export async function handleStatus(
     });
   } else {
     const activeServer = servers.find(
-      s => s.id === intervalConfig.activeServerId
+      (s: ServerConfig) => s.id === intervalConfig.activeServerId
     );
 
     const nextUpdate = intervalConfig.next || Date.now();
@@ -92,7 +92,7 @@ export async function handleStatus(
     embed.addFields({
       name: 'Update Schedule',
       value:
-        '• **Status Updates:** Every 10 minutes\n• **Daily Charts:** Posted at midnight\n• **Voice Channels:** Updated every 10 minutes',
+        'Status Updates: Every 10 minutes\nDaily Charts: Posted at midnight\nVoice Channels: Updated every 10 minutes',
       inline: false,
     });
   }

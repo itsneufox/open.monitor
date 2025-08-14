@@ -13,30 +13,56 @@ export const data = new SlashCommandBuilder()
         subcommand
             .setName('setup')
             .setDescription('Setup monitoring channels')
+            .addBooleanOption(option =>
+                option
+                    .setName('auto_text_channels')
+                    .setDescription('Automatically create text channels for status & charts (default: true)')
+                    .setRequired(false)
+            )
+            .addBooleanOption(option =>
+                option
+                    .setName('auto_voice_channels')
+                    .setDescription('Automatically create voice channels for player count & server IP (default: true)')
+                    .setRequired(false)
+            )
+            .addBooleanOption(option =>
+                option
+                    .setName('create_category')
+                    .setDescription('Create an "open.monitor" category for channels (default: true)')
+                    .setRequired(false)
+            )
             .addChannelOption(option =>
                 option
                     .setName('status_channel')
-                    .setDescription('Channel for status updates (leave empty to auto-create)')
+                    .setDescription('Channel for status updates (only if auto_text_channels is false)')
                     .addChannelTypes(ChannelType.GuildText)
                     .setRequired(false)
             )
             .addChannelOption(option =>
                 option
                     .setName('chart_channel')
-                    .setDescription('Channel for daily charts (leave empty to auto-create)')
+                    .setDescription('Channel for daily charts (only if auto_text_channels is false)')
                     .addChannelTypes(ChannelType.GuildText)
                     .setRequired(false)
             )
-            .addBooleanOption(option =>
+            .addChannelOption(option =>
                 option
-                    .setName('create_voice_channels')
-                    .setDescription('Auto-create voice channels for player count and server IP')
+                    .setName('player_count_channel')
+                    .setDescription('Voice channel for player count (only if auto_voice_channels is false)')
+                    .addChannelTypes(ChannelType.GuildVoice)
+                    .setRequired(false)
+            )
+            .addChannelOption(option =>
+                option
+                    .setName('server_ip_channel')
+                    .setDescription('Voice channel for server IP (only if auto_voice_channels is false)')
+                    .addChannelTypes(ChannelType.GuildVoice)
                     .setRequired(false)
             )
             .addBooleanOption(option =>
                 option
                     .setName('enable_monitoring')
-                    .setDescription('Enable monitoring after setup')
+                    .setDescription('Enable monitoring after setup (default: true)')
                     .setRequired(false)
             )
     )
