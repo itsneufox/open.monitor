@@ -9,6 +9,8 @@ export interface ServerConfig {
   port: number;
   addedAt: number;
   addedBy: string;
+  timezone: string;
+  dayResetHour: number;
 }
 
 export interface SimpleServer {
@@ -36,6 +38,8 @@ export interface ChartData {
   days: Array<{
     value: number;
     date: number;
+    timezone: string;
+    dayResetHour: number;
   }>;
   name: string;
   maxPlayers: number;

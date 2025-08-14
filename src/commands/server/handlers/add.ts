@@ -4,6 +4,7 @@ import { InputValidator } from '../../../utils/inputValidator';
 import { SAMPQuery } from '../../../utils/sampQuery';
 import { createAddServerModal, parseAddServerForm } from '../forms/addServerForm';
 import { validateServerInput, canQueryServer } from '../validators/serverValidation';
+import { TimezoneHelper } from '../../../utils/timezoneHelper';
 
 export async function handleAdd(
   interaction: ChatInputCommandInteraction,
@@ -50,9 +51,9 @@ async function handleAddFormSubmission(
     return;
   }
 
-  const { ip, port, name } = formData;
+  const { ip, port, name, timezone, dayResetHour } = formData;
 
-  const validation = validateServerInput(ip, port, name);
+  const validation = validateServerInput(ip, port, name, timezone, dayResetHour);
   if (!validation.valid) {
     await interaction.editReply(`${validation.error}`);
     return;
@@ -80,6 +81,8 @@ async function handleAddFormSubmission(
       name: '',
       addedAt: 0,
       addedBy: '',
+      timezone: 'GMT+0',
+      dayResetHour: 0,
     });
 
     const serverId = `${ip}:${port}`;
@@ -92,6 +95,8 @@ async function handleAddFormSubmission(
       port,
       addedAt: Date.now(),
       addedBy: interaction.user.id,
+      timezone,
+      dayResetHour,
     };
 
     const existingServers = (await client.servers.get(interaction.guildId!)) || [];
@@ -162,6 +167,8 @@ async function handleAddFormSubmission(
     const serverDataKey = getServerDataKey(interaction.guildId!, serverId);
     const existingData = await client.maxPlayers.get(serverDataKey);
     if (!existingData) {
+      const currentDayStart = TimezoneHelper.getCurrentDayPeriodStart(timezone, dayResetHour);
+      
       await client.maxPlayers.set(serverDataKey, {
         maxPlayersToday: testResult?.players || 0,
         days: [],
@@ -191,6 +198,8 @@ async function handleAddFormSubmission(
           name: finalServerName,
           addedAt: Date.now(),
           addedBy: interaction.user.id,
+          timezone,
+          dayResetHour,
         });
 
         embed.addFields({
@@ -208,6 +217,15 @@ async function handleAddFormSubmission(
         inline: true,
       });
     }
+
+    embed.addFields(
+      { name: 'Timezone', value: timezone, inline: true },
+      { 
+        name: 'Day Reset', 
+        value: TimezoneHelper.formatDayResetTime(dayResetHour), 
+        inline: true 
+      }
+    );
 
     if (setAsActive) {
       embed.addFields(
@@ -231,6 +249,12 @@ async function handleAddFormSubmission(
     }
 
     if (existingIndex === -1) {
+      embed.addFields({
+        name: 'Daily Tracking',
+        value: TimezoneHelper.getDayPeriodDescription(timezone, dayResetHour),
+        inline: false,
+      });
+
       embed.addFields({
         name: 'Security Info',
         value:

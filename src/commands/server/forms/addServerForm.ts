@@ -35,10 +35,28 @@ export function createAddServerModal(): ModalBuilder {
     .setRequired(false)
     .setMaxLength(5);
 
+  const timezoneInput = new TextInputBuilder()
+    .setCustomId('server_timezone')
+    .setLabel('Server Timezone (GMT+X or GMT-X)')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('GMT+0, GMT+2, GMT-5, etc.')
+    .setRequired(true)
+    .setMaxLength(10);
+
+  const dayResetInput = new TextInputBuilder()
+    .setCustomId('day_reset_hour')
+    .setLabel('Daily Reset Hour (0-23, when new day starts)')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('0 (midnight) or 5 (5 AM) or 12 (noon)')
+    .setRequired(false)
+    .setMaxLength(2);
+
   modal.addComponents(
     new ActionRowBuilder<TextInputBuilder>().addComponents(nameInput),
     new ActionRowBuilder<TextInputBuilder>().addComponents(ipInput),
-    new ActionRowBuilder<TextInputBuilder>().addComponents(portInput)
+    new ActionRowBuilder<TextInputBuilder>().addComponents(portInput),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(timezoneInput),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(dayResetInput)
   );
 
   return modal;
@@ -48,12 +66,16 @@ export interface ParsedServerForm {
   ip: string;
   port: number;
   name: string | null;
+  timezone: string;
+  dayResetHour: number;
 }
 
 export function parseAddServerForm(interaction: ModalSubmitInteraction): ParsedServerForm | { error: string } {
   const name = interaction.fields.getTextInputValue('server_name').trim() || null;
   const ip = interaction.fields.getTextInputValue('server_ip').trim();
   const portInput = interaction.fields.getTextInputValue('server_port').trim();
+  const timezone = interaction.fields.getTextInputValue('server_timezone').trim().toUpperCase();
+  const dayResetInput = interaction.fields.getTextInputValue('day_reset_hour').trim();
 
   if (!ip) {
     return { error: 'IP address is required.' };
@@ -68,5 +90,23 @@ export function parseAddServerForm(interaction: ModalSubmitInteraction): ParsedS
     port = parsedPort;
   }
 
-  return { ip, port, name };
+  if (!timezone.startsWith('GMT')) {
+    return { error: 'Timezone must be in GMT format (e.g., GMT+2, GMT-5, GMT+0).' };
+  }
+
+  const { TimezoneHelper } = require('../../../utils/timezoneHelper');
+  if (!TimezoneHelper.validateGMT(timezone)) {
+    return { error: 'Invalid GMT timezone. Use format GMT+X or GMT-X where X is between -12 and +14.' };
+  }
+
+  let dayResetHour = 0;
+  if (dayResetInput) {
+    const parsedHour = parseInt(dayResetInput);
+    if (isNaN(parsedHour) || !TimezoneHelper.validateDayResetHour(parsedHour)) {
+      return { error: 'Invalid day reset hour. Must be between 0 (midnight) and 23 (11 PM).' };
+    }
+    dayResetHour = parsedHour;
+  }
+
+  return { ip, port, name, timezone, dayResetHour };
 }

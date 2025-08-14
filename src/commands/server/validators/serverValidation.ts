@@ -1,5 +1,6 @@
 import { InputValidator } from '../../../utils/inputValidator';
 import { SecurityValidator } from '../../../utils/securityValidator';
+import { TimezoneHelper } from '../../../utils/timezoneHelper';
 
 export interface ServerValidationResult {
   valid: boolean;
@@ -7,7 +8,13 @@ export interface ServerValidationResult {
   sanitizedName?: string | null;
 }
 
-export function validateServerInput(ip: string, port: number, name: string | null): ServerValidationResult {
+export function validateServerInput(
+  ip: string,
+  port: number,
+  name: string | null,
+  timezone: string,
+  dayResetHour: number
+): ServerValidationResult {
   const portValidation = InputValidator.validatePort(port);
   if (!portValidation.valid) {
     return { valid: false, error: portValidation.error! };
@@ -35,6 +42,20 @@ export function validateServerInput(ip: string, port: number, name: string | nul
         '• Private networks (10.x.x.x, 192.168.x.x, 172.16-31.x.x)\n' +
         '• Loopback (127.x.x.x) - only allowed in development\n' +
         '• Invalid ranges (0.x.x.x, 169.254.x.x, 224.x.x.x, 255.x.x.x)'
+    };
+  }
+
+  if (!TimezoneHelper.validateGMT(timezone)) {
+    return {
+      valid: false,
+      error: 'Invalid timezone format. Use GMT+X or GMT-X (e.g., GMT+2, GMT-5, GMT+0).'
+    };
+  }
+
+  if (!TimezoneHelper.validateDayResetHour(dayResetHour)) {
+    return {
+      valid: false,
+      error: 'Invalid day reset hour. Must be between 0 and 23.'
     };
   }
 

@@ -1,6 +1,7 @@
 import { Events, TextChannel, VoiceChannel, ChannelType } from 'discord.js';
 import { getChart, getStatus, getPlayerCount, getRoleColor } from '../utils';
 import { CustomClient, getServerDataKey } from '../types';
+import { TimezoneHelper } from '../utils/timezoneHelper';
 
 export const name = Events.ClientReady;
 export const once = true;
@@ -37,19 +38,6 @@ export async function execute(client: CustomClient): Promise<void> {
       console.log(
         `Loaded configurations: ${totalGuilds} guilds, ${totalServers} servers`
       );
-    }
-
-    const nextCheck = (await client.maxPlayers.get('next')) as number | undefined;
-    if (!nextCheck) {
-      const now = new Date();
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
-
-      await client.maxPlayers.set('next', tomorrow.getTime());
-      if (!isProduction) {
-        console.log(`Set next daily check to: ${tomorrow.toISOString()}`);
-      }
     }
   } catch (error) {
     console.error('Error loading guild configurations:', error);
@@ -92,10 +80,15 @@ export async function execute(client: CustomClient): Promise<void> {
 
         let chartData = await client.maxPlayers.get(serverDataKey);
         if (!chartData) {
+          const currentDayStart = TimezoneHelper.getCurrentDayPeriodStart(
+            activeServer.timezone, 
+            activeServer.dayResetHour
+          );
+          
           chartData = {
             maxPlayersToday: 0,
             days: [],
-            name: '',
+            name: activeServer.name,
             maxPlayers: 0,
           };
           await client.maxPlayers.set(serverDataKey, chartData);
@@ -106,9 +99,66 @@ export async function execute(client: CustomClient): Promise<void> {
           3
         );
 
-        if (info.playerCount > chartData.maxPlayersToday) {
+        const currentDayStart = TimezoneHelper.getCurrentDayPeriodStart(
+          activeServer.timezone, 
+          activeServer.dayResetHour
+        );
+
+        const lastDayTimestamp = chartData.days.length > 0 ? chartData.days[chartData.days.length - 1]!.date : 0;
+        
+        if (TimezoneHelper.isNewDayPeriod(lastDayTimestamp, activeServer.timezone, activeServer.dayResetHour)) {
+          if (chartData.maxPlayersToday > 0 || chartData.days.length === 0) {
+            chartData.days.push({
+              value: chartData.maxPlayersToday,
+              date: currentDayStart.getTime(),
+              timezone: activeServer.timezone,
+              dayResetHour: activeServer.dayResetHour,
+            });
+
+            if (chartData.days.length > 30) {
+              chartData.days = chartData.days.slice(-30);
+            }
+
+            if (interval.chartChannel && chartData.days.length >= 2) {
+              try {
+                const chartChannel = await client.channels
+                  .fetch(interval.chartChannel)
+                  .catch(() => null) as TextChannel | null;
+                
+                if (chartChannel) {
+                  const color = getRoleColor(guild);
+                  const chart = await getChart(chartData, color);
+
+                  if (chartData.msg) {
+                    try {
+                      const oldMessage = await chartChannel.messages.fetch(chartData.msg);
+                      await oldMessage.delete();
+                    } catch (error) {
+                      console.log(`Could not delete old chart message: ${error}`);
+                    }
+                  }
+
+                  const resetTimeStr = TimezoneHelper.formatDayResetTime(activeServer.dayResetHour);
+                  const msg = await chartChannel.send({
+                    content: `**Daily Chart for ${activeServer.name}** (Day resets at ${resetTimeStr})`,
+                    files: [chart],
+                  });
+
+                  chartData.msg = msg.id;
+                }
+              } catch (chartError) {
+                console.error(`Failed to send chart to ${guild.name}:`, chartError);
+              }
+            }
+          }
+
           chartData.maxPlayersToday = info.playerCount;
+        } else {
+          if (info.playerCount > chartData.maxPlayersToday) {
+            chartData.maxPlayersToday = info.playerCount;
+          }
         }
+
         chartData.name = info.name;
         chartData.maxPlayers = info.maxPlayers;
         await client.maxPlayers.set(serverDataKey, chartData);
@@ -144,7 +194,7 @@ export async function execute(client: CustomClient): Promise<void> {
                   );
                   await existingMsg.edit({ embeds: [serverEmbed] });
                   if (!isProduction) {
-                    console.log(`🔄 Updated status message in ${guild.name} (5min cycle)`);
+                    console.log(`Updated status message in ${guild.name} (5min cycle)`);
                   }
                   messageUpdated = true;
                 } catch (error) {
@@ -207,7 +257,7 @@ export async function execute(client: CustomClient): Promise<void> {
 
                     if (!isProduction) {
                       console.log(
-                        `🔊 Updated player count channel in ${guild.name}: ${newName} (10min cycle)`
+                        `Updated player count channel in ${guild.name}: ${newName} (10min cycle)`
                       );
                     }
                   } catch (error: any) {
@@ -229,166 +279,6 @@ export async function execute(client: CustomClient): Promise<void> {
       }
     }
   }, 60000);
-
-  function msUntilMidnight(): number {
-    const now = new Date();
-    const midnight = new Date(now);
-    midnight.setDate(midnight.getDate() + 1);
-    midnight.setHours(0, 0, 0, 0);
-    return midnight.getTime() - now.getTime();
-  }
-
-  setTimeout(async () => {
-    await runDailyChartGeneration();
-
-    setInterval(async () => {
-      await runDailyChartGeneration();
-    }, 86400000);
-  }, msUntilMidnight());
-
-  async function runDailyChartGeneration() {
-    try {
-      const nextCheck = (await client.maxPlayers.get('next')) as number;
-      if (!nextCheck || Date.now() < nextCheck) return;
-
-      if (!isProduction) {
-        console.log('Starting daily chart generation...');
-      }
-
-      await client.maxPlayers.set('next', nextCheck + 86400000);
-
-      let chartsGenerated = 0;
-
-      for (const guild of client.guilds.cache.values()) {
-        try {
-          const guildConfig = client.guildConfigs.get(guild.id);
-          if (
-            !guildConfig?.interval?.enabled ||
-            !guildConfig.interval.chartChannel
-          )
-            continue;
-
-          const { interval, servers } = guildConfig;
-
-          const activeServer = servers.find(
-            s => s.id === interval.activeServerId
-          );
-          if (!activeServer) continue;
-
-          const serverDataKey = getServerDataKey(guild.id, activeServer.id);
-          const data = await client.maxPlayers.get(serverDataKey);
-          if (!data || !data.days) continue;
-
-          let chartValue = Math.max(data.maxPlayersToday, 0);
-
-          if (chartValue === 0) {
-            try {
-              const currentInfo = await client.rateLimitManager.executeWithRetry(
-                () => getPlayerCount(activeServer, guild.id, true),
-                2
-              );
-              chartValue = currentInfo.isOnline ? currentInfo.playerCount : 0;
-              if (!isProduction) {
-                console.log(`Using current player count for chart: ${chartValue} players`);
-              }
-            } catch (error) {
-              if (!isProduction) {
-                console.log(`Could not get current player count for chart, using 0`);
-              }
-              chartValue = 0;
-            }
-          }
-
-          const chartDataPoint = {
-            value: chartValue,
-            date: Date.now(),
-          };
-
-          data.days.push(chartDataPoint);
-
-          if (data.days.length > 30) {
-            data.days = data.days.slice(-30);
-          }
-
-          await client.maxPlayers.set(serverDataKey, data);
-
-          if (data.days.length >= 2) {
-            let chartChannel: TextChannel | null = null;
-            if (interval.chartChannel) {
-              chartChannel = (await client.channels
-                .fetch(interval.chartChannel)
-                .catch(() => null)) as TextChannel | null;
-            }
-            if (chartChannel) {
-              try {
-                const color = getRoleColor(guild);
-                const chart = await getChart(data, color);
-
-                if (data.msg) {
-                  try {
-                    const oldMessage = await chartChannel.messages.fetch(data.msg);
-                    await oldMessage.delete();
-                    if (!isProduction) {
-                      console.log(`Deleted old chart message for ${activeServer.name} in ${guild.name}`);
-                    }
-                  } catch (error) {
-                    if (!isProduction) {
-                      console.log(`Could not delete old chart message for ${activeServer.name}: ${error}`);
-                    }
-                  }
-                }
-
-                const msg = await chartChannel.send({
-                  content: `**Daily Chart for ${activeServer.name}**`,
-                  files: [chart],
-                });
-
-                data.msg = msg.id;
-                await client.maxPlayers.set(serverDataKey, data);
-
-                chartsGenerated++;
-                if (!isProduction) {
-                  console.log(`Chart sent to ${guild.name} for ${activeServer.name} (value: ${chartValue})`);
-                }
-              } catch (chartError) {
-                console.error(`Failed to send chart to ${guild.name}:`, chartError);
-              }
-            }
-          }
-        } catch (error) {
-          console.error(`Error generating chart for guild ${guild.name}:`, error);
-        }
-      }
-
-      if (isProduction && chartsGenerated > 0) {
-        console.log(`Generated ${chartsGenerated} daily charts`);
-      }
-
-      setTimeout(async () => {
-        for (const guild of client.guilds.cache.values()) {
-          try {
-            const guildConfig = client.guildConfigs.get(guild.id);
-            if (!guildConfig?.interval?.activeServerId) continue;
-
-            const activeServerId = guildConfig.interval.activeServerId;
-            const serverDataKey = getServerDataKey(guild.id, activeServerId);
-            const data = await client.maxPlayers.get(serverDataKey);
-            if (!data) continue;
-
-            data.maxPlayersToday = 0;
-            await client.maxPlayers.set(serverDataKey, data);
-          } catch (error) {
-            console.error(`Error resetting daily data for guild ${guild.name}:`, error);
-          }
-        }
-        if (!isProduction) {
-          console.log('Reset daily player counts for new day');
-        }
-      }, 120000);
-    } catch (error) {
-      console.error('Error in daily chart generation:', error);
-    }
-  }
 
   if (!isProduction) {
     setInterval(() => {

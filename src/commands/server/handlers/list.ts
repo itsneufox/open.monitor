@@ -1,5 +1,6 @@
 import { ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
 import { CustomClient } from '../../../types';
+import { TimezoneHelper } from '../../../utils/timezoneHelper';
 
 export async function handleList(
     interaction: ChatInputCommandInteraction,
@@ -45,7 +46,7 @@ export async function handleList(
 
         embed.addFields({
             name: `${isActive ? '🟢' : '⚪'} ${server.name}`,
-            value: `**Address:** ${server.ip}:${server.port}\n**Added:** ${addedDate}\n**Status:** ${isActive ? 'Active (Monitoring)' : 'Inactive'}`,
+            value: `**Address:** ${server.ip}:${server.port}\n**Timezone:** ${server.timezone || 'GMT+0'}\n**Day Reset:** ${TimezoneHelper.formatDayResetTime(server.dayResetHour || 0)}\n**Added:** ${addedDate}\n**Status:** ${isActive ? 'Active (Monitoring)' : 'Inactive'}`,
             inline: true,
         });
     }

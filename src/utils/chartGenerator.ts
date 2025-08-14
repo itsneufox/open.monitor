@@ -1,6 +1,7 @@
 import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
 import { AttachmentBuilder } from 'discord.js';
 import { ChartData } from '../types';
+import { TimezoneHelper } from './timezoneHelper';
 
 const chartJSNodeCanvas = new ChartJSNodeCanvas({
     width: 900,
@@ -23,7 +24,7 @@ export async function generateChart(
 ): Promise<AttachmentBuilder> {
     const chartData = (data as any).value ? (data as any).value : data;
 
-    console.log('📊 Chart Debug Info:', {
+    console.log('Chart Debug Info:', {
         hasValue: !!(data as any).value,
         originalDataKeys: Object.keys(data),
         chartDataKeys: Object.keys(chartData),
@@ -38,7 +39,7 @@ export async function generateChart(
 
     const sortedDays = chartData.days.sort((a: any, b: any) => a.date - b.date);
 
-    console.log('📊 Processed Chart Data:', {
+    console.log('Processed Chart Data:', {
         sortedDaysCount: sortedDays.length,
         dateRange: {
             first: new Date(sortedDays[0]?.date),
@@ -64,15 +65,19 @@ export async function generateChart(
     const firstDate = new Date(sortedDays[0]?.date || Date.now());
     const lastDate = new Date(sortedDays[sortedDays.length - 1]?.date || Date.now());
 
+    const firstDay = sortedDays[0];
+    const timezone = firstDay?.timezone || 'GMT+0';
+    const dayResetHour = firstDay?.dayResetHour ?? 0;
+
     let titleText = '';
     if (firstDate.getMonth() === lastDate.getMonth() && firstDate.getFullYear() === lastDate.getFullYear()) {
         const monthName = firstDate.toLocaleDateString('en-US', { month: 'long' });
-        titleText = `Peak Players from ${monthName} ${firstDate.getFullYear()}`;
+        titleText = `Peak Players - ${monthName} ${firstDate.getFullYear()} (${timezone})`;
     } else {
         const startMonth = firstDate.toLocaleDateString('en-US', { month: 'long' });
         const endMonth = lastDate.toLocaleDateString('en-US', { month: 'long' });
         const year = lastDate.getFullYear();
-        titleText = `Peak Players from ${startMonth} to ${endMonth} ${year}`;
+        titleText = `Peak Players - ${startMonth} to ${endMonth} ${year} (${timezone})`;
     }
 
     let xAxisTitle = '';
@@ -84,6 +89,10 @@ export async function generateChart(
         const endMonth = lastDate.toLocaleDateString('en-US', { month: 'long' });
         xAxisTitle = `Day of Month (${startMonth} - ${endMonth} ${lastDate.getFullYear()})`;
     }
+
+    const dayResetInfo = dayResetHour === 0 
+        ? 'Daily reset: Midnight' 
+        : `Daily reset: ${TimezoneHelper.formatDayResetTime(dayResetHour)}`;
 
     const configuration = {
         type: 'line' as const,
@@ -175,6 +184,9 @@ export async function generateChart(
                         },
                         label: function (context: any) {
                             return `Peak Players: ${context.parsed.y}`;
+                        },
+                        afterLabel: function () {
+                            return dayResetInfo;
                         },
                     },
                 },
