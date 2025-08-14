@@ -40,7 +40,8 @@ export async function execute(
     return;
   }
 
-  // Get all servers for this guild
+  console.log(`[players command] guildId: ${interaction.guildId}, user: ${interaction.user.tag}`);
+
   const servers = (await client.servers.get(interaction.guildId)) || [];
   if (servers.length === 0) {
     const embed = new EmbedBuilder()
@@ -58,7 +59,6 @@ export async function execute(
     return;
   }
 
-  // Determine which server to show players for
   const requestedServer = interaction.options.getString('server');
   let targetServer;
 
@@ -99,9 +99,11 @@ export async function execute(
     return;
   }
 
+  console.log(`[players command] Target server: ${targetServer.ip}:${targetServer.port}`);
+
   try {
-    // Get server info first
-    const info = await sampQuery.getServerInfo(targetServer);
+    console.log(`Getting server info for ${targetServer.ip}:${targetServer.port}`);
+    const info = await sampQuery.getServerInfo(targetServer, interaction.guildId);
 
     if (!info) {
       const embed = new EmbedBuilder()
@@ -159,12 +161,14 @@ export async function execute(
       return;
     }
 
-    // Get player list - as received from server
     let players: Array<{ name: string; score: number; ping?: number }> = [];
 
+    console.log(`Server has ${info.players} players, attempting to get player list...`);
+
     try {
-      // Try detailed query first (includes ping)
-      const detailedPlayers = await sampQuery.getDetailedPlayers(targetServer);
+      console.log('Trying detailed players query...');
+      const detailedPlayers = await sampQuery.getDetailedPlayers(targetServer, interaction.guildId);
+      console.log(`Detailed players response: ${detailedPlayers.length} players`);
 
       if (detailedPlayers.length > 0) {
         players = detailedPlayers.map(player => ({
@@ -172,20 +176,41 @@ export async function execute(
           score: player.score,
           ping: player.ping,
         }));
+        console.log(`Using detailed player data: ${players.length} players`);
       } else {
-        // Fall back to basic query
-        const basicPlayers = await sampQuery.getPlayers(targetServer);
+        console.log('Detailed query returned 0 players, trying basic query...');
+        const basicPlayers = await sampQuery.getPlayers(targetServer, interaction.guildId);
+        console.log(`Basic players response: ${basicPlayers.length} players`);
+
         players = basicPlayers.map(player => ({
           name: player.name,
           score: player.score,
         }));
+        console.log(`Using basic player data: ${players.length} players`);
       }
-    } catch (error) {
+    } catch (playerError) {
+      console.error('Player list query error:', playerError);
+
       const embed = new EmbedBuilder()
-        .setColor(0xff0000)
-        .setTitle('❌ Error')
+        .setColor(0xff9500)
+        .setTitle('⚠️ Player List Error')
         .setDescription(
-          `Failed to retrieve player list for **${targetServer.name}**.`
+          `**${targetServer.name}** has ${info.players} players online, but failed to retrieve player list.`
+        )
+        .addFields(
+          {
+            name: 'Server Info',
+            value:
+              `**Players:** ${info.players}/${info.maxplayers}\n` +
+              `**Gamemode:** ${info.gamemode || 'Unknown'}\n` +
+              `**Address:** \`${targetServer.ip}:${targetServer.port}\``,
+            inline: false
+          },
+          {
+            name: 'Error Details',
+            value: playerError instanceof Error ? playerError.message : 'Unknown error',
+            inline: false
+          }
         )
         .setFooter({ text: `${targetServer.ip}:${targetServer.port}` })
         .setTimestamp();
@@ -195,60 +220,77 @@ export async function execute(
     }
 
     if (players.length === 0) {
+      console.log(`No players returned from queries despite server showing ${info.players} players`);
+
       const embed = new EmbedBuilder()
-        .setColor(color)
-        .setTitle('Unable to Retrieve Players')
+        .setColor(0xff9500)
+        .setTitle('⚠️ Player Names Unavailable')
         .setDescription(
-          `**${targetServer.name}** shows ${info.players} players but player names could not be retrieved.`
+          `**${targetServer.name}** reports ${info.players} players online, but player names could not be retrieved.`
         )
-        .setFooter({ text: `${targetServer.ip}:${targetServer.port}` })
+        .addFields(
+          {
+            name: 'Server Info',
+            value:
+              `**Players:** ${info.players}/${info.maxplayers}\n` +
+              `**Gamemode:** ${info.gamemode || 'Unknown'}\n` +
+              `**Address:** \`${targetServer.ip}:${targetServer.port}\``,
+            inline: false
+          },
+          {
+            name: 'Possible Reasons',
+            value:
+              '• Network connectivity issues\n' +
+              '• Temporary server overload',
+            inline: false
+          }
+        )
+        .setFooter({
+          text: `${targetServer.ip}:${targetServer.port} • This doesn't affect server monitoring`
+        })
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed] });
       return;
     }
 
-    const playersAsReceived = players;
-
-    // Pagination setup
-    const playersPerPage = 25;
-    const totalPages = Math.ceil(playersAsReceived.length / playersPerPage);
+    const playersPerPage = 20;
+    const totalPages = Math.ceil(players.length / playersPerPage);
     let currentPage = 0;
 
     const generateEmbed = (page: number) => {
       const start = page * playersPerPage;
       const end = start + playersPerPage;
-      const pageData = playersAsReceived.slice(start, end);
+      const pageData = players.slice(start, end);
 
-      // Simple player list
-      const playerList = pageData
-        .map(player => {
-          const pingText =
-            player.ping !== undefined ? ` (${player.ping}ms)` : '';
-          return `• **${player.name}** - ${player.score}${pingText}`;
-        })
-        .join('\n');
+      const nameColumnWidth = 16;
+      const scoreColumnWidth = 6;
+
+      let playerTable = '```\n';
+      playerTable += 'Name'.padEnd(nameColumnWidth) + ' Score\n';
+      playerTable += '-'.repeat(nameColumnWidth + scoreColumnWidth + 1) + '\n';
+
+      pageData.forEach(player => {
+        const truncatedName = player.name.length > nameColumnWidth - 1
+          ? player.name.substring(0, nameColumnWidth - 1)
+          : player.name;
+
+        const nameColumn = truncatedName.padEnd(nameColumnWidth);
+        const scoreColumn = player.score.toString().padStart(scoreColumnWidth);
+
+        playerTable += `${nameColumn}${scoreColumn}\n`;
+      });
+
+      playerTable += '```';
 
       return new EmbedBuilder()
         .setColor(color)
         .setTitle('Online Players')
-        .setDescription(
-          `**${targetServer.name}**\n\`${targetServer.ip}:${targetServer.port}\``
-        )
-        .addFields(
-          {
-            name: 'Server Info',
-            value: `${info.players}/${info.maxplayers} players • ${info.gamemode || 'Unknown'} gamemode`,
-            inline: false,
-          },
-          {
-            name: `Players (Page ${page + 1}/${totalPages})`,
-            value: playerList,
-            inline: false,
-          }
-        )
+        .setDescription(playerTable)
         .setFooter({
-          text: `Showing ${start + 1}-${Math.min(end, playersAsReceived.length)} of ${playersAsReceived.length} players`,
+          text: totalPages > 1
+            ? `Page ${page + 1}/${totalPages} • ${players.length} players • ${targetServer.ip}:${targetServer.port}`
+            : `${players.length} players • ${targetServer.ip}:${targetServer.port}`,
         })
         .setTimestamp();
     };
@@ -278,7 +320,6 @@ export async function execute(
       );
     };
 
-    // Send initial message
     const embed = generateEmbed(currentPage);
     const buttons = totalPages > 1 ? generateButtons(currentPage) : undefined;
 
@@ -287,11 +328,10 @@ export async function execute(
       components: buttons ? [buttons] : [],
     });
 
-    // Only add button collector if there are multiple pages
     if (totalPages > 1) {
       const collector = message.createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 300000, // 5 minutes
+        time: 300000,
       });
 
       collector.on('collect', async buttonInteraction => {
@@ -328,29 +368,28 @@ export async function execute(
       });
 
       collector.on('end', async () => {
-        const disabledButtons =
-          new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder()
-              .setCustomId('players_first')
-              .setLabel('« First')
-              .setStyle(ButtonStyle.Secondary)
-              .setDisabled(true),
-            new ButtonBuilder()
-              .setCustomId('players_prev')
-              .setLabel('‹ Previous')
-              .setStyle(ButtonStyle.Primary)
-              .setDisabled(true),
-            new ButtonBuilder()
-              .setCustomId('players_next')
-              .setLabel('Next ›')
-              .setStyle(ButtonStyle.Primary)
-              .setDisabled(true),
-            new ButtonBuilder()
-              .setCustomId('players_last')
-              .setLabel('Last »')
-              .setStyle(ButtonStyle.Secondary)
-              .setDisabled(true)
-          );
+        const disabledButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId('players_first')
+            .setLabel('« First')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(true),
+          new ButtonBuilder()
+            .setCustomId('players_prev')
+            .setLabel('‹ Previous')
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(true),
+          new ButtonBuilder()
+            .setCustomId('players_next')
+            .setLabel('Next ›')
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(true),
+          new ButtonBuilder()
+            .setCustomId('players_last')
+            .setLabel('Last »')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(true)
+        );
 
         try {
           await interaction.editReply({
@@ -368,8 +407,13 @@ export async function execute(
       .setColor(0xff0000)
       .setTitle('❌ Error')
       .setDescription(
-        `Failed to retrieve player list for **${targetServer.name}**.`
+        `Failed to retrieve information for **${targetServer.name}**.`
       )
+      .addFields({
+        name: 'Error Details',
+        value: error instanceof Error ? error.message : 'Unknown error',
+        inline: false
+      })
       .setFooter({ text: `${targetServer.ip}:${targetServer.port}` })
       .setTimestamp();
 

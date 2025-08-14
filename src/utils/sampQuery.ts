@@ -50,18 +50,30 @@ interface SAMPFullInfo {
   extraInfo?: OpenMPExtraInfo | null;
 }
 
+interface ServerMetadata {
+  hostname: string;
+  gamemode: string;
+  language: string;
+  version: string;
+  isOpenMP: boolean;
+  maxPlayers: number;
+  banner?: string;
+  logo?: string;
+  lastUpdated: number;
+}
+
 export class SAMPQuery {
   private decodeString(buffer: Buffer): string {
     try {
       let decoded = buffer.toString('utf8');
 
-      if (decoded.includes('�') || decoded.includes('\ufffd')) {
+      if (decoded.includes('ï¿½') || decoded.includes('\ufffd')) {
         const encodings = ['latin1', 'cp1252', 'iso-8859-1', 'cp850'];
 
         for (const encoding of encodings) {
           try {
             decoded = iconv.decode(buffer, encoding);
-            if (!decoded.includes('�') && !decoded.includes('\ufffd')) {
+            if (!decoded.includes('ï¿½') && !decoded.includes('\ufffd')) {
               break;
             }
           } catch (error) {
@@ -243,29 +255,78 @@ export class SAMPQuery {
 
   private parsePlayersResponse(data: Buffer): SAMPPlayer[] {
     try {
-      let offset = 11;
+      let offset = 11; // Skip SAMP header
+
+      if (offset + 2 > data.length) {
+        console.log('Player response too short for player count');
+        return [];
+      }
 
       const playerCount = data.readUInt16LE(offset);
       offset += 2;
 
+      console.log(`Parsing players response: ${playerCount} players reported`);
+
+      if (playerCount === 0) {
+        return [];
+      }
+
+      if (playerCount > 1000) {
+        console.warn(`Suspicious player count: ${playerCount}`);
+        return [];
+      }
+
       const players: SAMPPlayer[] = [];
 
       for (let i = 0; i < playerCount && offset < data.length; i++) {
-        const nameLength = data.readUInt8(offset);
-        offset += 1;
+        try {
+          if (offset + 1 > data.length) {
+            console.log(`Not enough data for player ${i} name length`);
+            break;
+          }
 
-        const name = this.decodeString(
-          data.subarray(offset, offset + nameLength)
-        );
-        offset += nameLength;
+          const nameLength = data.readUInt8(offset);
+          offset += 1;
 
-        const score = data.readInt32LE(offset);
-        offset += 4;
+          console.log(`Player ${i}: name length = ${nameLength}`);
 
-        players.push({ name, score });
+          if (nameLength > 64) {
+            console.warn(`Invalid name length for player ${i}: ${nameLength}`);
+            break;
+          }
+
+          if (offset + nameLength > data.length) {
+            console.log(`Not enough data for player ${i} name (need ${nameLength} bytes)`);
+            break;
+          }
+
+          const nameBuffer = data.subarray(offset, offset + nameLength);
+          const name = this.decodeString(nameBuffer);
+          offset += nameLength;
+
+          if (offset + 4 > data.length) {
+            console.log(`Not enough data for player ${i} score`);
+            break;
+          }
+
+          const score = data.readInt32LE(offset);
+          offset += 4;
+
+          console.log(`Player ${i}: name="${name}", score=${score}`);
+
+          if (name && name.length > 0) {
+            players.push({ name, score });
+          }
+
+        } catch (playerError) {
+          console.error(`Error parsing player ${i}:`, playerError);
+          break;
+        }
       }
 
+      console.log(`Successfully parsed ${players.length} players out of ${playerCount} reported`);
       return players;
+
     } catch (error) {
       console.error('Error parsing players response:', error);
       return [];
@@ -451,11 +512,96 @@ export class SAMPQuery {
     });
   }
 
+  public async getQuickStatus(
+    server: ServerConfig,
+    guildId: string = 'unknown'
+  ): Promise<{ players: number; isOnline: boolean; gamemode?: string } | null> {
+    console.log(`[getQuickStatus] guildId: ${guildId}, server: ${server.ip}:${server.port}`);
+
+    const data = await this.query(server, 'i', guildId, undefined, true);
+    if (!data) return null;
+
+    const info = this.parseInfoResponse(data);
+    if (!info) return null;
+
+    return {
+      players: info.players,
+      isOnline: true,
+      gamemode: info.gamemode
+    };
+  }
+
+  public async getServerMetadata(
+    server: ServerConfig,
+    guildId: string = 'unknown'
+  ): Promise<any | null> {
+
+    try {
+      console.log(`Fetching full metadata for ${server.ip}:${server.port}`);
+
+      const info = await this.getServerInfo(server, guildId, false);
+      if (!info) return null;
+
+      const isOpenMP = await this.isOpenMP(server, guildId, false);
+
+      let version = 'Unknown';
+      let banner: string | undefined;
+      let logo: string | undefined;
+
+      if (isOpenMP) {
+        try {
+          const rules = await this.getServerRules(server, guildId, false);
+          version = rules.version || 'open.mp';
+
+          const extraInfo = await this.getOpenMPExtraInfo(server, guildId, false);
+          if (extraInfo) {
+            banner = extraInfo.darkBanner || extraInfo.lightBanner;
+            logo = extraInfo.logo;
+          }
+        } catch (error) {
+          console.log('Failed to get open.mp extras:', error);
+        }
+      } else {
+        try {
+          const rules = await this.getServerRules(server, guildId, false);
+          version = rules.version || rules.Ver || rules.v || 'SA:MP 0.3.7';
+        } catch (error) {
+          console.log('Failed to get SA:MP version:', error);
+        }
+      }
+
+      const metadata: ServerMetadata = {
+        hostname: info.hostname,
+        gamemode: info.gamemode,
+        language: info.language,
+        version,
+        isOpenMP,
+        maxPlayers: info.maxplayers,
+        lastUpdated: Date.now()
+      };
+
+      if (banner) {
+        metadata.banner = banner;
+      }
+      if (logo) {
+        metadata.logo = logo;
+      }
+
+      return metadata;
+
+    } catch (error) {
+      console.error('Error fetching server metadata:', error);
+      return null;
+    }
+  }
+
   public async getServerInfo(
     server: ServerConfig,
     guildId: string = 'unknown',
     isMonitoring: boolean = false
   ): Promise<SAMPInfo | null> {
+    console.log(`[getServerInfo] guildId: ${guildId}, server: ${server.ip}:${server.port}, isMonitoring: ${isMonitoring}`);
+
     const data = await this.query(
       server,
       'i',
@@ -465,6 +611,7 @@ export class SAMPQuery {
     );
     return data ? this.parseInfoResponse(data) : null;
   }
+
 
   public async getServerRules(
     server: ServerConfig,
@@ -485,14 +632,44 @@ export class SAMPQuery {
     server: ServerConfig,
     guildId: string = 'unknown'
   ): Promise<SAMPPlayer[]> {
+    console.log(`[getPlayers] guildId: ${guildId}, server: ${server.ip}:${server.port}`);
+    console.log(`[DEBUG] Querying players for ${server.ip}:${server.port}`);
+
     const data = await this.query(server, 'c', guildId);
-    return data ? this.parsePlayersResponse(data) : [];
+
+    if (!data) {
+      console.log('[DEBUG] No response data received');
+      return [];
+    }
+
+    console.log(`[DEBUG] Response length: ${data.length} bytes`);
+    console.log(`[DEBUG] First 20 bytes: ${data.subarray(0, 20).toString('hex')}`);
+
+    if (data.length < 11 || data.toString('ascii', 0, 4) !== 'SAMP') {
+      console.log('[DEBUG] Invalid SAMP response header');
+      return [];
+    }
+
+    const opcode = String.fromCharCode(data[10]!);
+    console.log(`[DEBUG] Response opcode: '${opcode}' (expected: 'c')`);
+
+    if (opcode !== 'c') {
+      console.log('[DEBUG] Wrong opcode in response');
+      return [];
+    }
+
+    const result = this.parsePlayersResponse(data);
+    console.log(`[DEBUG] Parsed ${result.length} players`);
+
+    return result;
   }
 
   public async getDetailedPlayers(
     server: ServerConfig,
     guildId: string = 'unknown'
   ): Promise<SAMPDetailedPlayer[]> {
+    console.log(`[getDetailedPlayers] guildId: ${guildId}, server: ${server.ip}:${server.port}`);
+
     const data = await this.query(server, 'd', guildId);
     return data ? this.parseDetailedPlayersResponse(data) : [];
   }
@@ -650,6 +827,139 @@ export class SAMPQuery {
     }
 
     return results;
+  }
+
+  // Debug method for testing specific servers
+  public async testPlayersRaw(server: ServerConfig): Promise<void> {
+    console.log(`Testing raw players query for ${server.ip}:${server.port}`);
+
+    try {
+      // Create socket
+      const socket = dgram.createSocket('udp4');
+
+      // Create packet manually
+      const packet = Buffer.alloc(11);
+      packet.write('SAMP', 0);
+      const ipOctets = server.ip.split('.').map(n => parseInt(n));
+
+      // Fix: Add proper null checks
+      if (ipOctets.length !== 4 || ipOctets.some(octet => isNaN(octet))) {
+        console.error('Invalid IP address format');
+        return;
+      }
+
+      packet[4] = ipOctets[0] || 0;
+      packet[5] = ipOctets[1] || 0;
+      packet[6] = ipOctets[2] || 0;
+      packet[7] = ipOctets[3] || 0;
+      packet[8] = server.port & 0xFF;
+      packet[9] = (server.port >> 8) & 0xFF;
+      packet[10] = 'c'.charCodeAt(0);
+
+      console.log(`Sending packet: ${packet.toString('hex')}`);
+
+      socket.on('message', (data, rinfo) => {
+        console.log(`Received ${data.length} bytes from ${rinfo.address}:${rinfo.port}`);
+        console.log(`Raw response: ${data.toString('hex')}`);
+
+        if (data.length >= 13) {
+          const playerCount = data.readUInt16LE(11);
+          console.log(`Player count in response: ${playerCount}`);
+
+          if (playerCount > 0) {
+            console.log('Response has players - parsing issue in bot!');
+
+            let offset = 13;
+            for (let i = 0; i < Math.min(3, playerCount) && offset < data.length; i++) {
+              try {
+                const nameLength = data.readUInt8(offset);
+                offset += 1;
+
+                if (offset + nameLength + 4 <= data.length) {
+                  const nameBuffer = data.subarray(offset, offset + nameLength);
+                  const name = nameBuffer.toString('utf8').replace(/\0/g, '');
+                  offset += nameLength;
+
+                  const score = data.readInt32LE(offset);
+                  offset += 4;
+
+                  console.log(`Player ${i}: "${name}" (score: ${score})`);
+                } else {
+                  console.log(`Player ${i}: Not enough data remaining`);
+                  break;
+                }
+              } catch (parseError) {
+                console.log(`Player ${i}: Parse error:`, parseError);
+                break;
+              }
+            }
+          }
+        }
+
+        socket.close();
+      });
+
+      socket.on('error', (err) => {
+        console.error('Socket error:', err);
+        socket.close();
+      });
+
+      const timeout = setTimeout(() => {
+        console.log('Query timeout');
+        socket.close();
+      }, 5000);
+
+      socket.send(packet, server.port, server.ip, (err) => {
+        if (err) {
+          console.error('Send error:', err);
+          clearTimeout(timeout);
+          socket.close();
+        } else {
+          console.log('Packet sent successfully');
+        }
+      });
+
+    } catch (error) {
+      console.error('Test error:', error);
+    }
+  }
+
+  public async debugServer(server: ServerConfig, guildId: string = 'unknown'): Promise<void> {
+    console.log(`=== DEBUGGING SERVER ${server.ip}:${server.port} ===`);
+
+    try {
+      console.log('1. Testing info query...');
+      const info = await this.getServerInfo(server, guildId);
+      console.log('Info result:', info);
+
+      if (!info) {
+        console.log('Server is offline, stopping debug');
+        return;
+      }
+
+      console.log('2. Testing players query...');
+      const rawData = await this.query(server, 'c', guildId);
+
+      if (rawData) {
+        console.log(`Raw response length: ${rawData.length}`);
+        console.log(`Raw response (hex): ${rawData.toString('hex')}`);
+        console.log(`Raw response (first 50 bytes): ${rawData.subarray(0, Math.min(50, rawData.length)).toString('hex')}`);
+
+        const players = this.parsePlayersResponse(rawData);
+        console.log(`Parsed players: ${players.length}`);
+      } else {
+        console.log('No raw data received for players query');
+      }
+
+      console.log('3. Testing rules query...');
+      const rules = await this.getServerRules(server, guildId);
+      console.log('Rules count:', Object.keys(rules).length);
+
+    } catch (error) {
+      console.error('Debug error:', error);
+    }
+
+    console.log('=== DEBUG COMPLETE ===');
   }
 
   public async testAllOpcodes(

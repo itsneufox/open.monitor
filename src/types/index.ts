@@ -31,6 +31,15 @@ export interface IntervalConfig {
   lastVoiceUpdate?: number;
 }
 
+export interface PlayerCountResult {
+  playerCount: number;
+  maxPlayers: number;
+  name: string;
+  isOnline: boolean;
+  isCached: boolean;
+  error?: string;
+}
+
 export interface ChartData {
   maxPlayersToday: number;
   days: Array<{
