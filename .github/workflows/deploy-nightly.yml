@@ -60,20 +60,30 @@ jobs:
 
     - name: Configure environment
       run: |
-        cat > .env << EOF
-        TOKEN=${{ secrets.DISCORD_NIGHTLY_TOKEN }}
-        CLIENT_ID=${{ secrets.DISCORD_NIGHTLY_CLIENT_ID }}
-        DATABASE_URL=${{ secrets.NIGHTLY_DATABASE_URL }}
-        OWNER_ID=${{ secrets.OWNER_ID }}
-        NODE_ENV=development
-        LOG_LEVEL=debug
-        BOT_VERSION=${NIGHTLY_VERSION:-nightly}
-        MYSQL_ROOT_PASSWORD=${{ secrets.NIGHTLY_MYSQL_ROOT_PASSWORD }}
-        MYSQL_PASSWORD=${{ secrets.NIGHTLY_MYSQL_PASSWORD }}
-        VALKEY_HOSTS=valkey-nightly:6379
-        VALKEY_USE_TLS=false
-        VALKEY_KEY_EXPIRY_SECONDS=300
-        EOF
+        echo "Creating .env file directly..."
+        
+        echo "TOKEN=${{ secrets.DISCORD_NIGHTLY_TOKEN }}" > .env
+        echo "CLIENT_ID=${{ secrets.DISCORD_NIGHTLY_CLIENT_ID }}" >> .env
+        echo "DATABASE_URL=${{ secrets.NIGHTLY_DATABASE_URL }}" >> .env
+        echo "OWNER_ID=${{ secrets.OWNER_ID }}" >> .env
+        echo "NODE_ENV=development" >> .env
+        echo "LOG_LEVEL=debug" >> .env
+        echo "BOT_VERSION=${NIGHTLY_VERSION:-nightly}" >> .env
+        echo "MYSQL_ROOT_PASSWORD=${{ secrets.NIGHTLY_MYSQL_ROOT_PASSWORD }}" >> .env
+        echo "MYSQL_PASSWORD=${{ secrets.NIGHTLY_MYSQL_PASSWORD }}" >> .env
+        echo "VALKEY_HOSTS=valkey-nightly:6379" >> .env
+        echo "VALKEY_USE_TLS=false" >> .env
+        echo "VALKEY_KEY_EXPIRY_SECONDS=300" >> .env
+        
+        echo "=== Checking if .env was created ==="
+        if [ -f .env ]; then
+          echo "✅ .env file exists"
+          echo "File size: $(stat -c%s .env) bytes"
+          echo "Line count: $(wc -l < .env)"
+        else
+          echo "❌ .env file was not created"
+          exit 1
+        fi
 
     - name: Deploy application
       run: |
