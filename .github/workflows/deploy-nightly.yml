@@ -88,6 +88,9 @@ jobs:
         
         cd /opt/open.monitor-nightly
         
+        ls -la .env
+        cat .env
+        
         sudo docker image prune -f
         
         echo "Building nightly application..."
