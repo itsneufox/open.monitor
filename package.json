@@ -1,6 +1,6 @@
 {
   "name": "open.monitor",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "SA:MP/open.mp server monitoring Discord bot",
   "main": "dist/index.js",
   "scripts": {
