@@ -67,7 +67,7 @@ jobs:
         OWNER_ID=${{ secrets.OWNER_ID }}
         NODE_ENV=development
         LOG_LEVEL=debug
-        BOT_VERSION=${NEW_VERSION:-nightly}
+        BOT_VERSION=${NIGHTLY_VERSION:-nightly}
         MYSQL_ROOT_PASSWORD=${{ secrets.NIGHTLY_MYSQL_ROOT_PASSWORD }}
         MYSQL_PASSWORD=${{ secrets.NIGHTLY_MYSQL_PASSWORD }}
         VALKEY_HOSTS=valkey-nightly:6379
