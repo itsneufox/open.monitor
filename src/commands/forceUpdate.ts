@@ -46,14 +46,13 @@ export async function execute(
     let errors: string[] = [];
 
     if (allGuilds) {
-      // Force update all guilds with active monitoring
       for (const [guildId, guildConfig] of client.guildConfigs.entries()) {
         if (
           guildConfig.interval?.enabled &&
           guildConfig.interval.activeServerId
         ) {
           try {
-            await performGuildUpdate(client, guildId, guildConfig);
+            await performGuildUpdate(client, guildId, guildConfig, true);
             updatedGuilds++;
           } catch (error) {
             const guild = client.guilds.cache.get(guildId);
@@ -90,7 +89,6 @@ export async function execute(
       return;
     }
 
-    // Single guild update
     const guildId = targetGuildId || interaction.guildId!;
     const guildConfig = client.guildConfigs.get(guildId);
 
@@ -115,8 +113,7 @@ export async function execute(
       return;
     }
 
-    // Perform immediate update
-    await performGuildUpdate(client, guildId, guildConfig);
+    await performGuildUpdate(client, guildId, guildConfig, true);
 
     const guild = client.guilds.cache.get(guildId);
     const embed = new EmbedBuilder()
@@ -165,15 +162,14 @@ export async function execute(
   }
 }
 
-// Function to perform the actual guild update
 async function performGuildUpdate(
   client: CustomClient,
   guildId: string,
-  guildConfig: any
+  guildConfig: any,
+  isManualCommand: boolean = false
 ): Promise<void> {
   const { interval, servers } = guildConfig;
 
-  // Find the active server
   const activeServer = servers.find(
     (s: any) => s.id === interval.activeServerId
   );
@@ -186,14 +182,14 @@ async function performGuildUpdate(
     throw new Error('Guild not found');
   }
 
-  // Get server uptime stats
   let onlineStats = await client.uptimes.get(activeServer.id);
   if (!onlineStats) {
     onlineStats = { uptime: 0, downtime: 0 };
   }
 
-  // Get player count and update max players
-  let chartData = await client.maxPlayers.get(getServerDataKey(guildId, activeServer.id));
+  let chartData = await client.maxPlayers.get(
+    getServerDataKey(guildId, activeServer.id)
+  );
   if (!chartData) {
     chartData = {
       maxPlayersToday: 0,
@@ -203,19 +199,24 @@ async function performGuildUpdate(
     };
   }
 
-  // Get current server info
-  const info = await getPlayerCount(activeServer, guildId, true);
+  const info = await getPlayerCount(
+    activeServer,
+    guildId,
+    true,
+    isManualCommand
+  );
 
-  // Update chart data
   if (info.playerCount > chartData.maxPlayersToday) {
     chartData.maxPlayersToday = info.playerCount;
   }
   chartData.name = info.name;
   chartData.maxPlayers = info.maxPlayers;
 
-  await client.maxPlayers.set(getServerDataKey(guildId, activeServer.id), chartData);
+  await client.maxPlayers.set(
+    getServerDataKey(guildId, activeServer.id),
+    chartData
+  );
 
-  // Update uptime stats
   if (info.isOnline) {
     onlineStats.uptime++;
   } else {
@@ -224,7 +225,6 @@ async function performGuildUpdate(
   const serverDataKey = getServerDataKey(guildId, activeServer.id);
   await client.uptimes.set(serverDataKey, onlineStats);
 
-  // Update status channel
   if (interval.statusChannel) {
     const statusChannel = await client.channels
       .fetch(interval.statusChannel)
@@ -232,10 +232,9 @@ async function performGuildUpdate(
 
     if (statusChannel && 'send' in statusChannel) {
       const color = getRoleColor(guild);
-      // Pass guildId and isMonitoring correctly
+
       const serverEmbed = await getStatus(activeServer, color, guildId, true);
 
-      // Try to edit existing message first
       if (interval.statusMessage) {
         try {
           const existingMsg = await statusChannel.messages.fetch(
@@ -243,13 +242,11 @@ async function performGuildUpdate(
           );
           await existingMsg.edit({ embeds: [serverEmbed] });
         } catch (error) {
-          // Create new message if edit fails
           const newMsg = await statusChannel.send({ embeds: [serverEmbed] });
           interval.statusMessage = newMsg.id;
           await client.intervals.set(guildId, interval);
         }
       } else {
-        // Create new message
         const newMsg = await statusChannel.send({ embeds: [serverEmbed] });
         interval.statusMessage = newMsg.id;
         await client.intervals.set(guildId, interval);
@@ -257,10 +254,7 @@ async function performGuildUpdate(
     }
   }
 
-  // Set next update time (reset to normal schedule)
-  interval.next = Date.now() + 600000; // 10 minutes
+  interval.next = Date.now() + 600000;
   await client.intervals.set(guildId, interval);
-
-  // Update cache
   client.guildConfigs.set(guildId, guildConfig);
 }

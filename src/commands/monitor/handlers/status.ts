@@ -1,4 +1,8 @@
-import { ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from 'discord.js';
+import {
+  ChatInputCommandInteraction,
+  EmbedBuilder,
+  MessageFlags,
+} from 'discord.js';
 import { CustomClient, ServerConfig } from '../../../types';
 
 export async function handleStatus(

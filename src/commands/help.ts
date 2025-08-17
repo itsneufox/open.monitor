@@ -64,7 +64,6 @@ export async function execute(
   const hasManagementPerms = await hasManagementPermission(interaction, client);
   const color = getRoleColor(interaction.guild!);
 
-  // Define all commands with their information
   const commands: CommandInfo[] = [
     {
       name: '/server add',
@@ -217,7 +216,6 @@ export async function execute(
     },
   ];
 
-  // Add owner-only commands if user has owner permissions
   if (interaction.user.id === process.env.OWNER_ID) {
     commands.push(
       {
@@ -251,7 +249,6 @@ export async function execute(
     );
   }
 
-  // If specific command is requested, show detailed help
   if (specificCommand) {
     const command = commands.find(cmd =>
       cmd.name.includes(`/${specificCommand}`)
@@ -291,13 +288,11 @@ export async function execute(
     }
   }
 
-  // Filter commands by category if specified
   let filteredCommands = commands;
   if (category) {
     filteredCommands = commands.filter(cmd => cmd.category === category);
   }
 
-  // Group commands by category
   const categories = {
     server: filteredCommands.filter(cmd => cmd.category === 'server'),
     monitoring: filteredCommands.filter(cmd => cmd.category === 'monitoring'),
@@ -306,10 +301,8 @@ export async function execute(
     utility: filteredCommands.filter(cmd => cmd.category === 'utility'),
   };
 
-  // Create embeds for each category
   const embeds: EmbedBuilder[] = [];
 
-  // Overview embed (only if no specific category)
   if (!category) {
     const overviewEmbed = new EmbedBuilder()
       .setColor(color)
@@ -364,7 +357,6 @@ export async function execute(
     embeds.push(overviewEmbed);
   }
 
-  // Category embeds
   Object.entries(categories).forEach(([categoryKey, categoryCommands]) => {
     if (categoryCommands.length === 0) return;
 
@@ -374,7 +366,6 @@ export async function execute(
       .setDescription(getCategoryDescription(categoryKey))
       .setTimestamp();
 
-    // Group commands into fields to avoid hitting field limits
     const commandsPerField = 4;
     for (let i = 0; i < categoryCommands.length; i += commandsPerField) {
       const commandGroup = categoryCommands.slice(i, i + commandsPerField);
@@ -395,13 +386,11 @@ export async function execute(
     embeds.push(categoryEmbed);
   });
 
-  // If only one embed (specific category), show it directly
   if (embeds.length === 1) {
     await interaction.editReply({ embeds });
     return;
   }
 
-  // Setup pagination for multiple embeds
   let currentPage = 0;
 
   const generateButtons = (page: number) => {
@@ -429,18 +418,16 @@ export async function execute(
     );
   };
 
-  // Send initial message
   const buttons = embeds.length > 1 ? generateButtons(currentPage) : undefined;
   const message = await interaction.editReply({
     embeds: [embeds[currentPage]!],
     components: buttons ? [buttons] : [],
   });
 
-  // Setup button collector
   if (embeds.length > 1) {
     const collector = message.createMessageComponentCollector({
       componentType: ComponentType.Button,
-      time: 300000, // 5 minutes
+      time: 300000,
     });
 
     collector.on('collect', async buttonInteraction => {
@@ -503,9 +490,7 @@ export async function execute(
         await interaction.editReply({
           components: [disabledButtons],
         });
-      } catch (error) {
-        // Message might have been deleted, ignore error
-      }
+      } catch (error) {}
     });
   }
 }

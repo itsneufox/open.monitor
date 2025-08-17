@@ -2,6 +2,7 @@ import { Events, TextChannel, VoiceChannel, ChannelType } from 'discord.js';
 import { getChart, getStatus, getPlayerCount, getRoleColor } from '../utils';
 import { CustomClient, getServerDataKey } from '../types';
 import { TimezoneHelper } from '../utils/timezoneHelper';
+import { SAMPRateLimitManager } from '../utils/samp/rateLimitManager';
 
 export const name = Events.ClientReady;
 export const once = true;
@@ -11,6 +12,18 @@ export async function execute(client: CustomClient): Promise<void> {
 
   console.log(`Logged in as ${client.user!.tag}`);
   client.user!.setActivity('SA:MP/omp Servers', { type: 3 });
+
+  try {
+    await SAMPRateLimitManager.initialize(client);
+    console.log('Advanced rate limiting system initialized');
+
+    if (SAMPRateLimitManager.protection) {
+      SAMPRateLimitManager.protection.clearAllCooldowns();
+      console.log('Cleared startup server cooldowns');
+    }
+  } catch (error) {
+    console.warn('Failed to initialize advanced rate limiting:', error);
+  }
 
   try {
     let totalServers = 0;
@@ -41,6 +54,7 @@ export async function execute(client: CustomClient): Promise<void> {
     console.error('Error loading guild configurations:', error);
   }
 
+  
   setInterval(async () => {
     for (const guild of client.guilds.cache.values()) {
       try {
@@ -49,7 +63,7 @@ export async function execute(client: CustomClient): Promise<void> {
         console.error(`Error processing guild ${guild.name}:`, error);
       }
     }
-  }, 60000);
+  }, 300000);
 
   setInterval(() => {
     try {
@@ -57,6 +71,10 @@ export async function execute(client: CustomClient): Promise<void> {
       const { ServerMetadataCache } = require('../utils/serverCache');
       SecurityValidator.cleanupOldEntries();
       ServerMetadataCache.cleanup();
+
+      if (SAMPRateLimitManager.isInitialized) {
+        SAMPRateLimitManager.optimizeCache();
+      }
     } catch (error) {
       console.error('Error during cleanup:', error);
     }
@@ -64,18 +82,21 @@ export async function execute(client: CustomClient): Promise<void> {
 
   if (!isProduction) {
     setInterval(() => {
-      const queueStats = client.rateLimitManager.getQueueStats();
-      const activeQueues = Object.entries(queueStats).filter(
-        ([_, stats]) => (stats as any).size > 0
-      );
-
-      if (activeQueues.length > 0) {
-        console.log('Rate limit queue statistics:', activeQueues);
+      if (SAMPRateLimitManager.isInitialized) {
+        const stats = SAMPRateLimitManager.getComprehensiveStats();
+        if (stats.rateLimiting.totalLimiters > 0) {
+          console.log('Rate limiting statistics:', {
+            backend: stats.rateLimiting.backend,
+            activeServers: stats.serverProtection.totalServers,
+            circuitBreakers: stats.serverProtection.activeCircuitBreakers,
+            cacheHitRate: Math.round(stats.cache.hitRate * 100) + '%',
+          });
+        }
       }
     }, 1800000);
   }
 
-  console.log('Bot is ready and monitoring servers!');
+  console.log('Bot is ready with enhanced rate limiting protection!');
 }
 
 async function processGuildMonitoring(
@@ -84,16 +105,24 @@ async function processGuildMonitoring(
   isProduction: boolean
 ): Promise<void> {
   const guildConfig = client.guildConfigs.get(guild.id);
-  if (!guildConfig?.interval?.enabled || !guildConfig.interval.activeServerId) return;
+  if (!guildConfig?.interval?.enabled || !guildConfig.interval.activeServerId)
+    return;
 
   const { interval, servers } = guildConfig;
   const activeServer = servers.find(s => s.id === interval.activeServerId);
   if (!activeServer) return;
 
   const { SecurityValidator } = require('../utils/securityValidator');
-  const banStatus = SecurityValidator.isIPBanned(activeServer.ip);
-  if (banStatus.banned) {
-    console.log(`Skipping monitoring for banned IP: ${activeServer.ip} - ${banStatus.reason}`);
+  const canQuery = await SecurityValidator.canQueryIP(
+    activeServer.ip,
+    guild.id,
+    true
+  );
+
+  if (!canQuery.allowed) {
+    console.log(
+      `Skipping monitoring for ${activeServer.ip}: ${canQuery.reason}`
+    );
     return;
   }
 
@@ -105,12 +134,31 @@ async function processGuildMonitoring(
 
   const info = await getPlayerCount(activeServer, guild.id, true);
 
-  await updateChartData(client, guild.id, activeServer, info, interval, isProduction);
+  await SecurityValidator.recordQuerySuccess(
+    activeServer.ip,
+    info.isOnline ? 1000 : 5000,
+    guild.id
+  );
+
+  await updateChartData(
+    client,
+    guild.id,
+    activeServer,
+    info,
+    interval,
+    isProduction
+  );
   await updateUptimeStats(client, guild.id, activeServer, info);
 
   if (statusUpdateDue && interval.statusChannel) {
-    await updateStatusChannel(client, guild, interval, activeServer, isProduction);
-    interval.next = now + 300000; // 5 minutes
+    await updateStatusChannel(
+      client,
+      guild,
+      interval,
+      activeServer,
+      isProduction
+    );
+    interval.next = now + 300000;
   }
 
   if (voiceUpdateDue && interval.playerCountChannel) {
@@ -135,10 +183,10 @@ async function updateChartData(
   let chartData = await client.maxPlayers.get(serverDataKey);
   if (!chartData) {
     const currentDayStart = TimezoneHelper.getCurrentDayPeriodStart(
-      activeServer.timezone, 
+      activeServer.timezone,
       activeServer.dayResetHour
     );
-    
+
     chartData = {
       maxPlayersToday: 0,
       days: [],
@@ -149,13 +197,22 @@ async function updateChartData(
   }
 
   const currentDayStart = TimezoneHelper.getCurrentDayPeriodStart(
-    activeServer.timezone, 
+    activeServer.timezone,
     activeServer.dayResetHour
   );
 
-  const lastDayTimestamp = chartData.days.length > 0 ? chartData.days[chartData.days.length - 1]!.date : 0;
-  
-  if (TimezoneHelper.isNewDayPeriod(lastDayTimestamp, activeServer.timezone, activeServer.dayResetHour)) {
+  const lastDayTimestamp =
+    chartData.days.length > 0
+      ? chartData.days[chartData.days.length - 1]?.date ?? 0
+      : 0;
+
+  if (
+    TimezoneHelper.isNewDayPeriod(
+      lastDayTimestamp,
+      activeServer.timezone,
+      activeServer.dayResetHour
+    )
+  ) {
     if (chartData.maxPlayersToday > 0 || chartData.days.length === 0) {
       chartData.days.push({
         value: chartData.maxPlayersToday,
@@ -170,27 +227,31 @@ async function updateChartData(
 
       if (interval.chartChannel && chartData.days.length >= 2) {
         try {
-          const guild = client.guilds.cache.get(guildId);
-          if (!guild) return;
+          const guildObj = client.guilds.cache.get(guildId);
+          if (!guildObj) return;
 
-          const chartChannel = await client.channels
+          const chartChannel = (await client.channels
             .fetch(interval.chartChannel)
-            .catch(() => null) as TextChannel | null;
-          
+            .catch(() => null)) as TextChannel | null;
+
           if (chartChannel) {
-            const color = getRoleColor(guild);
+            const color = getRoleColor(guildObj);
             const chart = await getChart(chartData, color);
 
             if (chartData.msg) {
               try {
-                const oldMessage = await chartChannel.messages.fetch(chartData.msg);
+                const oldMessage = await chartChannel.messages.fetch(
+                  chartData.msg
+                );
                 await oldMessage.delete();
               } catch (error) {
                 console.log(`Could not delete old chart message: ${error}`);
               }
             }
 
-            const resetTimeStr = TimezoneHelper.formatDayResetTime(activeServer.dayResetHour);
+            const resetTimeStr = TimezoneHelper.formatDayResetTime(
+              activeServer.dayResetHour
+            );
             const msg = await chartChannel.send({
               content: `**Daily Chart for ${activeServer.name}** (Day resets at ${resetTimeStr})`,
               files: [chart],
@@ -223,7 +284,7 @@ async function updateUptimeStats(
   info: any
 ): Promise<void> {
   const serverDataKey = getServerDataKey(guildId, activeServer.id);
-  
+
   let onlineStats = await client.uptimes.get(serverDataKey);
   if (!onlineStats) {
     onlineStats = { uptime: 0, downtime: 0 };
@@ -234,7 +295,7 @@ async function updateUptimeStats(
   } else {
     onlineStats.downtime++;
   }
-  
+
   await client.uptimes.set(serverDataKey, onlineStats);
 }
 
@@ -246,9 +307,9 @@ async function updateStatusChannel(
   isProduction: boolean
 ): Promise<void> {
   try {
-    const statusChannel = await client.channels
+    const statusChannel = (await client.channels
       .fetch(interval.statusChannel)
-      .catch(() => null) as TextChannel | null;
+      .catch(() => null)) as TextChannel | null;
 
     if (!statusChannel) return;
 
@@ -259,14 +320,15 @@ async function updateStatusChannel(
 
     if (interval.statusMessage) {
       try {
-        const existingMsg = await statusChannel.messages.fetch(interval.statusMessage);
+        const existingMsg = await statusChannel.messages.fetch(
+          interval.statusMessage
+        );
         await existingMsg.edit({ embeds: [serverEmbed] });
         if (!isProduction) {
           console.log(`Updated status message in ${guild.name} (5min cycle)`);
         }
         messageUpdated = true;
-      } catch (error) {
-      }
+      } catch (error) { }
     }
 
     if (!messageUpdated) {
@@ -299,23 +361,43 @@ async function updateVoiceChannels(
       .fetch(interval.playerCountChannel)
       .catch(() => null);
 
-    if (playerCountChannel && playerCountChannel.type === ChannelType.GuildVoice) {
+    if (
+      playerCountChannel &&
+      playerCountChannel.type === ChannelType.GuildVoice
+    ) {
       const channel = playerCountChannel as VoiceChannel;
-      const newName = info.isOnline
-        ? `👥 ${info.playerCount}/${info.maxPlayers}`
-        : '❌ Server Offline';
+
+      let newName: string;
+
+      if (info.error && info.error.includes('rate limit')) {
+        if (info.isCached) {
+          newName = `Players: ${info.playerCount}/${info.maxPlayers} (cached)`;
+        } else {
+          newName = 'Rate Limited';
+        }
+      } else if (info.isOnline) {
+        newName = `Players: ${info.playerCount}/${info.maxPlayers}`;
+      } else {
+        newName = 'Server Offline';
+      }
 
       if (channel.name !== newName) {
         try {
           await channel.setName(newName);
           if (!isProduction) {
-            console.log(`Updated player count channel in ${guild.name}: ${newName} (10min cycle)`);
+            console.log(
+              `Updated player count channel in ${guild.name}: ${newName} (10min cycle)`
+            );
           }
         } catch (error: any) {
           if (error.code === 50013) {
-            console.warn(`Missing permissions to update voice channel in ${guild.name}`);
+            console.warn(
+              `Missing permissions to update voice channel in ${guild.name}`
+            );
           } else if (error.code === 429) {
-            console.warn(`Rate limited updating voice channel in ${guild.name}`);
+            console.warn(
+              `Rate limited updating voice channel in ${guild.name}`
+            );
           }
         }
       }

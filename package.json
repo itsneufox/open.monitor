@@ -31,16 +31,18 @@
     "discord.js": "^14.18.0",
     "dotenv": "^16.4.7",
     "iconv-lite": "^0.6.3",
-    "keyv": "^5.3.2"
+    "keyv": "^5.3.2",
+    "rate-limiter-flexible": "^7.2.0"
   },
   "devDependencies": {
-    "@types/iconv-lite": "^0.0.1",
+    "@eslint/js": "^9.16.0",
     "@types/node": "^22.13.11",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
-    "eslint": "^8.57.0",
+    "@typescript-eslint/eslint-plugin": "^8.39.1",
+    "@typescript-eslint/parser": "^8.39.1",
+    "eslint": "^9.16.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",
+    "globals": "^15.13.0",
     "prettier": "^3.3.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2"

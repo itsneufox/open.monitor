@@ -17,26 +17,36 @@ export class TimezoneHelper {
   static getServerTime(timezone: string): Date {
     const offset = this.parseGMTOffset(timezone);
     if (offset === null) return new Date();
-    
+
     const now = new Date();
-    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-    return new Date(utc + (offset * 3600000));
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    return new Date(utc + offset * 3600000);
   }
 
-  static getCurrentDayPeriodStart(timezone: string, dayResetHour: number): Date {
+  static getCurrentDayPeriodStart(
+    timezone: string,
+    dayResetHour: number
+  ): Date {
     const serverTime = this.getServerTime(timezone);
     const dayStart = new Date(serverTime);
     dayStart.setHours(dayResetHour, 0, 0, 0);
-    
+
     if (serverTime.getHours() < dayResetHour) {
       dayStart.setDate(dayStart.getDate() - 1);
     }
-    
+
     return dayStart;
   }
 
-  static isNewDayPeriod(lastDayStart: number, timezone: string, dayResetHour: number): boolean {
-    const currentDayStart = this.getCurrentDayPeriodStart(timezone, dayResetHour);
+  static isNewDayPeriod(
+    lastDayStart: number,
+    timezone: string,
+    dayResetHour: number
+  ): boolean {
+    const currentDayStart = this.getCurrentDayPeriodStart(
+      timezone,
+      dayResetHour
+    );
     return currentDayStart.getTime() > lastDayStart;
   }
 
@@ -48,7 +58,10 @@ export class TimezoneHelper {
     return `${(hour - 12).toString().padStart(2, '0')}:00 PM`;
   }
 
-  static getDayPeriodDescription(timezone: string, dayResetHour: number): string {
+  static getDayPeriodDescription(
+    timezone: string,
+    dayResetHour: number
+  ): string {
     const resetTime = this.formatDayResetTime(dayResetHour);
     return `Day resets at ${resetTime} (${timezone})`;
   }

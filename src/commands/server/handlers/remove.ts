@@ -1,9 +1,17 @@
-import { ChatInputCommandInteraction, ModalSubmitInteraction, EmbedBuilder, MessageFlags } from 'discord.js';
+import {
+  ChatInputCommandInteraction,
+  ModalSubmitInteraction,
+  EmbedBuilder,
+  MessageFlags,
+} from 'discord.js';
 import { CustomClient } from '../../../types';
 import { DatabaseCleaner } from '../../../utils/databaseCleaner';
 import { getServerDataKey } from '../../../types';
 import { InputValidator } from '../../../utils/inputValidator';
-import { createRemoveServerModal, parseRemoveServerForm } from '../forms/removeServerForm';
+import {
+  createRemoveServerModal,
+  parseRemoveServerForm,
+} from '../forms/removeServerForm';
 
 export async function handleRemove(
   interaction: ChatInputCommandInteraction,
@@ -24,7 +32,9 @@ export async function handleRemove(
   try {
     const modalSubmission = await interaction.awaitModalSubmit({
       time: 300000,
-      filter: i => i.customId === 'server_remove_form' && i.user.id === interaction.user.id,
+      filter: i =>
+        i.customId === 'server_remove_form' &&
+        i.user.id === interaction.user.id,
     });
 
     await handleRemoveFormSubmission(modalSubmission, client, servers);
@@ -49,16 +59,21 @@ async function handleRemoveFormSubmission(
   const { serverName, confirmText } = formData;
 
   if (confirmText.toLowerCase() !== 'delete') {
-    await interaction.editReply('Server deletion cancelled. You must type "delete" exactly to confirm.');
+    await interaction.editReply(
+      'Server deletion cancelled. You must type "delete" exactly to confirm.'
+    );
     return;
   }
 
   const serverIndex = servers.findIndex(
-    s => s.name.toLowerCase() === serverName.toLowerCase() || s.id === serverName
+    s =>
+      s.name.toLowerCase() === serverName.toLowerCase() || s.id === serverName
   );
 
   if (serverIndex === -1) {
-    await interaction.editReply('Server not found. Please check the server name and try again.');
+    await interaction.editReply(
+      'Server not found. Please check the server name and try again.'
+    );
     return;
   }
 
@@ -96,11 +111,14 @@ async function handleRemoveFormSubmission(
                 .fetch(intervalConfig.serverIpChannel)
                 .catch(() => null);
               if (serverIpChannel && 'setName' in serverIpChannel) {
-                const channelNameValidation = InputValidator.validateChannelName(
-                  `IP: ${newActiveServer.ip}:${newActiveServer.port}`
-                );
+                const channelNameValidation =
+                  InputValidator.validateChannelName(
+                    `IP: ${newActiveServer.ip}:${newActiveServer.port}`
+                  );
                 if (channelNameValidation.valid) {
-                  await (serverIpChannel as any).setName(channelNameValidation.sanitized);
+                  await (serverIpChannel as any).setName(
+                    channelNameValidation.sanitized
+                  );
                 }
               }
             } catch (error) {

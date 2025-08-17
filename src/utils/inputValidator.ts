@@ -1,5 +1,4 @@
 class InputValidator {
-  // Server name validation with XSS protection
   static validateServerName(name: string): {
     valid: boolean;
     sanitized?: string;
@@ -16,7 +15,6 @@ class InputValidator {
       };
     }
 
-    // Basic sanitization
     const sanitized = name
       .replace(/[<>'"&\x00-\x1f\x7f-\x9f]/g, '')
       .replace(/\s+/g, ' ')
@@ -29,7 +27,6 @@ class InputValidator {
       };
     }
 
-    // Block common spam patterns
     const suspiciousPatterns = [
       /discord\.gg/i,
       /bit\.ly/i,
@@ -49,7 +46,6 @@ class InputValidator {
     return { valid: true, sanitized };
   }
 
-  // Port validation with reserved port blocking
   static validatePort(port: number): { valid: boolean; error?: string } {
     if (!Number.isInteger(port)) {
       return { valid: false, error: 'Port must be a valid integer' };
@@ -59,7 +55,6 @@ class InputValidator {
       return { valid: false, error: 'Port must be between 1 and 65535' };
     }
 
-    // Common system ports to block
     const blockedPorts = [
       21, 22, 23, 25, 53, 80, 110, 143, 443, 993, 995, 135, 137, 138, 139, 445,
       1433, 3306, 5432, 6379, 27017, 3389, 5900, 6667, 6697,
@@ -72,7 +67,6 @@ class InputValidator {
     return { valid: true };
   }
 
-  // Discord snowflake ID validation
   static validateDiscordId(
     id: string,
     type: string = 'role'
@@ -85,7 +79,6 @@ class InputValidator {
       return { valid: false, error: `Invalid ${type} ID format` };
     }
 
-    // Basic timestamp validation
     const timestamp = (BigInt(id) >> 22n) + 1420070400000n;
     const now = BigInt(Date.now());
     if (timestamp < 1420070400000n || timestamp > now + 86400000n) {
@@ -95,7 +88,6 @@ class InputValidator {
     return { valid: true };
   }
 
-  // Command input sanitization
   static validateCommandOption(
     value: string,
     maxLength: number = 100
@@ -124,7 +116,6 @@ class InputValidator {
     return { valid: true, sanitized };
   }
 
-  // Channel name formatting - updated for voice channels
   static validateChannelName(name: string): {
     valid: boolean;
     sanitized?: string;
@@ -134,16 +125,13 @@ class InputValidator {
       return { valid: false, error: 'Channel name is required' };
     }
 
-    // For voice channels, we're much more permissive
-    // Just trim whitespace and limit length
     const sanitized = name.trim().slice(0, 100);
 
     if (sanitized.length === 0) {
       return { valid: false, error: 'Channel name cannot be empty' };
     }
 
-    // Only block truly problematic characters that Discord doesn't allow
-    const prohibitedChars = /[\x00-\x1f\x7f]/g; // Control characters only
+    const prohibitedChars = /[\x00-\x1f\x7f]/g;
     if (prohibitedChars.test(sanitized)) {
       return {
         valid: false,
@@ -154,7 +142,6 @@ class InputValidator {
     return { valid: true, sanitized };
   }
 
-  // Database key safety check
   static validateDatabaseKey(key: string): { valid: boolean; error?: string } {
     if (!key || typeof key !== 'string') {
       return { valid: false, error: 'Database key is required' };
@@ -174,7 +161,6 @@ class InputValidator {
     return { valid: true };
   }
 
-  // Command rate limiting
   private static commandUsage = new Map<
     string,
     { lastUsed: number; count: number }
@@ -203,7 +189,6 @@ class InputValidator {
     return { allowed: true };
   }
 
-  // Guild config validation
   static validateGuildConfig(
     guildId: string,
     config: any

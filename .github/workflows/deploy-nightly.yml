@@ -1,0 +1,124 @@
+name: Deploy Nightly
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    
+    steps:
+    - name: Checkout nightly branch
+      uses: actions/checkout@v4
+      with:
+        ref: nightly
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+      
+    - name: Install system dependencies
+      run: |
+        if command -v apk >/dev/null 2>&1; then
+          sudo apk add --no-cache python3 make g++ pkgconfig cairo-dev pango-dev giflib-dev
+          sudo ln -sf python3 /usr/bin/python
+        elif command -v apt-get >/dev/null 2>&1; then
+          sudo apt-get update
+          sudo apt-get install -y python3 make g++ pkg-config libcairo2-dev libpango1.0-dev libgif-dev
+          sudo ln -sf python3 /usr/bin/python
+        fi
+
+    - name: Version management
+      run: |
+        git config --local user.email "mission-control@open-monitor.space"
+        git config --local user.name "🛰️ Mission Control"
+        
+        npm ci --silent
+        
+        CURRENT_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "1.0.0")
+        echo "Current nightly version: v$CURRENT_VERSION"
+        
+        # Bump version for nightly just like production
+        npm version patch --no-git-tag-version
+        NEW_VERSION=$(node -p "require('./package.json').version")
+        
+        echo "NEW_VERSION=v$NEW_VERSION" >> $GITHUB_ENV
+        echo "Updated nightly to version: v$NEW_VERSION"
+        
+        git add package.json package-lock.json
+        git commit -m "🚀 Nightly release v$NEW_VERSION [skip ci]"
+        git tag -a "v$NEW_VERSION-nightly" -m "Nightly release v$NEW_VERSION"
+        
+        git push origin nightly
+        git push origin "v$NEW_VERSION-nightly"
+
+    - name: Configure environment
+      run: |
+        cat > .env << EOF
+        TOKEN=${{ secrets.DISCORD_NIGHTLY_TOKEN }}
+        CLIENT_ID=${{ secrets.DISCORD_NIGHTLY_CLIENT_ID }}
+        DATABASE_URL=${{ secrets.NIGHTLY_DATABASE_URL }}
+        OWNER_ID=${{ secrets.OWNER_ID }}
+        NODE_ENV=development
+        LOG_LEVEL=debug
+        BOT_VERSION=${NEW_VERSION:-nightly}
+        MYSQL_ROOT_PASSWORD=${{ secrets.NIGHTLY_MYSQL_ROOT_PASSWORD }}
+        MYSQL_PASSWORD=${{ secrets.NIGHTLY_MYSQL_PASSWORD }}
+        VALKEY_HOSTS=valkey-nightly:6379
+        VALKEY_USE_TLS=false
+        VALKEY_KEY_EXPIRY_SECONDS=300
+        EOF
+
+    - name: Deploy application
+      run: |
+        echo "Stopping existing nightly containers..."
+        sudo docker-compose -f /opt/open.monitor-nightly/docker-compose.nightly.yml down --timeout 30 || true
+        
+        echo "Preparing nightly deployment..."
+        sudo rm -rf /opt/open.monitor-nightly/*
+        sudo mkdir -p /opt/open.monitor-nightly
+        sudo cp -r * /opt/open.monitor-nightly/
+        sudo chown -R github-runner:github-runner /opt/open.monitor-nightly
+        
+        cd /opt/open.monitor-nightly
+        
+        sudo docker image prune -f
+        
+        echo "Building nightly application..."
+        sudo docker-compose -f docker-compose.nightly.yml build --no-cache
+        
+        echo "Starting nightly services..."
+        sudo docker-compose -f docker-compose.nightly.yml up -d
+        
+        sleep 15
+        
+        if [ "$(sudo docker ps -q -f name=openmonitor-nightly-bot -f status=running)" ]; then
+          echo "✅ Nightly deployment successful"
+          sudo docker ps --filter name=openmonitor-nightly
+          sudo docker logs openmonitor-nightly-bot --tail 10
+        else
+          echo "❌ Nightly deployment failed"
+          sudo docker logs openmonitor-nightly-bot --tail 20 || true
+          exit 1
+        fi
+        
+        sudo docker system prune -f
+
+    - name: Deployment summary
+      run: |
+        CURRENT_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
+        echo "================================="
+        echo "Nightly Deployment Complete"
+        echo "================================="
+        echo "Version: v$CURRENT_VERSION (Nightly)"
+        echo "Tag: ${NEW_VERSION}-nightly"
+        echo "Time: $(date -u)"
+        echo "Status: ✅ Running (Development)"
+        echo "Next deployment: Tomorrow at 03:00 UTC"
+        echo "================================="

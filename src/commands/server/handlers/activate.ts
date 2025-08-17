@@ -53,7 +53,9 @@ export async function handleActivate(
           `IP: ${server.ip}:${server.port}`
         );
         if (channelNameValidation.valid) {
-          await (serverIpChannel as any).setName(channelNameValidation.sanitized);
+          await (serverIpChannel as any).setName(
+            channelNameValidation.sanitized
+          );
         }
       }
     } catch (error) {

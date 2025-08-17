@@ -11,7 +11,9 @@ export function createRemoveServerModal(servers: any[]): ModalBuilder {
     .setCustomId('server_remove_form')
     .setTitle('Remove Server');
 
-  const serverList = servers.map(s => `• ${s.name} (${s.ip}:${s.port})`).join('\n');
+  const serverList = servers
+    .map(s => `• ${s.name} (${s.ip}:${s.port})`)
+    .join('\n');
   const placeholder = servers.length > 0 ? servers[0].name : 'Server Name';
 
   const availableServersInput = new TextInputBuilder()
@@ -38,7 +40,9 @@ export function createRemoveServerModal(servers: any[]): ModalBuilder {
     .setMaxLength(10);
 
   modal.addComponents(
-    new ActionRowBuilder<TextInputBuilder>().addComponents(availableServersInput),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(
+      availableServersInput
+    ),
     new ActionRowBuilder<TextInputBuilder>().addComponents(serverInput),
     new ActionRowBuilder<TextInputBuilder>().addComponents(confirmInput)
   );
@@ -51,9 +55,13 @@ export interface ParsedRemoveServerForm {
   confirmText: string;
 }
 
-export function parseRemoveServerForm(interaction: ModalSubmitInteraction): ParsedRemoveServerForm | { error: string } {
+export function parseRemoveServerForm(
+  interaction: ModalSubmitInteraction
+): ParsedRemoveServerForm | { error: string } {
   const serverName = interaction.fields.getTextInputValue('server_name').trim();
-  const confirmText = interaction.fields.getTextInputValue('confirm_delete').trim();
+  const confirmText = interaction.fields
+    .getTextInputValue('confirm_delete')
+    .trim();
 
   if (!serverName) {
     return { error: 'Server name is required.' };

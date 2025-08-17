@@ -5,7 +5,6 @@ import path from 'path';
 import Keyv from 'keyv';
 import KeyvMysql from '@keyv/mysql';
 import { CustomClient } from './types';
-import { RateLimitManager } from './utils/rateLimitManager';
 
 config();
 
@@ -23,8 +22,6 @@ if (missingEnvVars.length > 0) {
 const client = new Client({
   intents: ['Guilds', 'GuildVoiceStates'],
 }) as CustomClient;
-
-client.rateLimitManager = new RateLimitManager();
 
 try {
   const mysqlAdapter = new KeyvMysql(process.env.DATABASE_URL!);
@@ -106,10 +103,15 @@ function loadCommandsRecursively(directoryPath: string): any[] {
           const command = require(indexFile);
           if ('data' in command && 'execute' in command) {
             commands.push(command);
-            console.log(`  Loaded command: ${command.data.name} (from ${item.name}/)`);
+            console.log(
+              `  Loaded command: ${command.data.name} (from ${item.name}/)`
+            );
           }
         } catch (error) {
-          console.error(`  Failed to load command from ${item.name}/index:`, error);
+          console.error(
+            `  Failed to load command from ${item.name}/index:`,
+            error
+          );
         }
       }
     } else if (item.name.endsWith('.ts') || item.name.endsWith('.js')) {
@@ -117,7 +119,9 @@ function loadCommandsRecursively(directoryPath: string): any[] {
 
       const nameWithoutExt = item.name.replace(/\.(ts|js)$/, '');
       if (nameWithoutExt === 'monitor' || nameWithoutExt === 'server') {
-        console.log(`  Skipping old file: ${item.name} (using directory version instead)`);
+        console.log(
+          `  Skipping old file: ${item.name} (using directory version instead)`
+        );
         continue;
       }
 
@@ -254,17 +258,20 @@ process.on('uncaughtException', error => {
   process.exit(1);
 });
 
-client.login(process.env.TOKEN).then(async () => {
-  try {
-    const { valkeyReady } = await import('./utils/valkey');
-    await valkeyReady;
-    console.log('All systems ready!');
-  } catch (error) {
-    console.warn('Valkey not available, continuing without cache');
-  }
-}).catch(error => {
-  console.error('Failed to login to Discord:', error);
-  process.exit(1);
-});
+client
+  .login(process.env.TOKEN)
+  .then(async () => {
+    try {
+      const { valkeyReady } = await import('./utils/valkey');
+      await valkeyReady;
+      console.log('All systems ready!');
+    } catch (error) {
+      console.warn('Valkey not available, continuing without cache');
+    }
+  })
+  .catch(error => {
+    console.error('Failed to login to Discord:', error);
+    process.exit(1);
+  });
 
 export default commands;

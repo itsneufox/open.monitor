@@ -40,7 +40,6 @@ export async function execute(
     return;
   }
 
-  // Get all servers for this guild
   const servers = (await client.servers.get(interaction.guildId)) || [];
   if (servers.length === 0) {
     const embed = new EmbedBuilder()
@@ -58,7 +57,6 @@ export async function execute(
     return;
   }
 
-  // Determine which server to show players for
   const requestedServer = interaction.options.getString('server');
   let targetServer;
 
@@ -100,8 +98,13 @@ export async function execute(
   }
 
   try {
-    // Get server info first
-    const info = await sampQuery.getServerInfo(targetServer);
+    const info = await sampQuery.getServerInfo(
+      targetServer,
+      interaction.guildId,
+      false,
+      interaction.user.id,
+      true
+    );
 
     if (!info) {
       const embed = new EmbedBuilder()
@@ -159,12 +162,15 @@ export async function execute(
       return;
     }
 
-    // Get player list - as received from server
     let players: Array<{ name: string; score: number; ping?: number }> = [];
 
     try {
-      // Try detailed query first (includes ping)
-      const detailedPlayers = await sampQuery.getDetailedPlayers(targetServer);
+      const detailedPlayers = await sampQuery.getDetailedPlayers(
+        targetServer,
+        interaction.guildId,
+        interaction.user.id,
+        true
+      );
 
       if (detailedPlayers.length > 0) {
         players = detailedPlayers.map(player => ({
@@ -173,8 +179,12 @@ export async function execute(
           ping: player.ping,
         }));
       } else {
-        // Fall back to basic query
-        const basicPlayers = await sampQuery.getPlayers(targetServer);
+        const basicPlayers = await sampQuery.getPlayers(
+          targetServer,
+          interaction.guildId,
+          interaction.user.id,
+          true
+        );
         players = basicPlayers.map(player => ({
           name: player.name,
           score: player.score,
@@ -210,7 +220,6 @@ export async function execute(
 
     const playersAsReceived = players;
 
-    // Pagination setup
     const playersPerPage = 25;
     const totalPages = Math.ceil(playersAsReceived.length / playersPerPage);
     let currentPage = 0;
@@ -220,7 +229,6 @@ export async function execute(
       const end = start + playersPerPage;
       const pageData = playersAsReceived.slice(start, end);
 
-      // Simple player list
       const playerList = pageData
         .map(player => {
           const pingText =
@@ -278,7 +286,6 @@ export async function execute(
       );
     };
 
-    // Send initial message
     const embed = generateEmbed(currentPage);
     const buttons = totalPages > 1 ? generateButtons(currentPage) : undefined;
 
@@ -287,11 +294,10 @@ export async function execute(
       components: buttons ? [buttons] : [],
     });
 
-    // Only add button collector if there are multiple pages
     if (totalPages > 1) {
       const collector = message.createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 300000, // 5 minutes
+        time: 300000,
       });
 
       collector.on('collect', async buttonInteraction => {
@@ -356,9 +362,7 @@ export async function execute(
           await interaction.editReply({
             components: [disabledButtons],
           });
-        } catch (error) {
-          // Message might have been deleted, ignore error
-        }
+        } catch (error) {}
       });
     }
   } catch (error) {

@@ -1,6 +1,8 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
+
+RUN npm install -g npm@10.9.2
 
 COPY package*.json ./
 
@@ -13,7 +15,7 @@ COPY . .
 
 RUN npm run build
 
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S openmonitor -u 1001 -G nodejs

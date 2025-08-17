@@ -1,7 +1,6 @@
 import { Guild, GuildMember } from 'discord.js';
 
 export function getRoleColor(guild: Guild): number {
-  // Get bot's highest role color or default to blue
   const botMember: GuildMember | undefined = guild.members.cache.get(
     guild.client.user.id
   );

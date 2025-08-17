@@ -56,11 +56,10 @@ async function handleSetRole(
 ) {
   await interaction.deferReply();
 
-  // Rate limiting
   const rateLimitCheck = InputValidator.checkCommandRateLimit(
     interaction.user.id,
     'role-set',
-    3 // Max 3 role changes per minute
+    3
   );
 
   if (!rateLimitCheck.allowed) {
@@ -72,21 +71,18 @@ async function handleSetRole(
 
   const roleOption = interaction.options.getRole('role', true);
 
-  // Ensure we have a proper Role object, not APIRole
   const role = interaction.guild!.roles.cache.get(roleOption.id);
   if (!role) {
     await interaction.editReply('❌ Role not found in this server.');
     return;
   }
 
-  // Validate role ID
   const roleValidation = InputValidator.validateDiscordId(role.id, 'role');
   if (!roleValidation.valid) {
     await interaction.editReply(`❌ Invalid role: ${roleValidation.error}`);
     return;
   }
 
-  // Validate guild ID
   const guildValidation = InputValidator.validateDiscordId(
     interaction.guildId!,
     'guild'
@@ -98,7 +94,6 @@ async function handleSetRole(
     return;
   }
 
-  // Prevent setting @everyone or dangerous roles
   if (role.id === interaction.guildId || role.name === '@everyone') {
     await interaction.editReply(
       '❌ Cannot set @everyone as management role for security reasons.'
@@ -106,7 +101,6 @@ async function handleSetRole(
     return;
   }
 
-  // Check for managed roles (bots, integrations)
   if (role.managed) {
     await interaction.editReply(
       '❌ Cannot set managed roles (bot roles, integration roles) as management role.'
@@ -114,7 +108,6 @@ async function handleSetRole(
     return;
   }
 
-  // Check role position relative to bot's highest role
   const botMember = interaction.guild!.members.cache.get(client.user!.id);
   if (botMember) {
     const botHighestRole = botMember.roles.highest;
@@ -126,7 +119,6 @@ async function handleSetRole(
     }
   }
 
-  // Type guard to ensure we have PermissionsBitField
   const rolePermissions = role.permissions;
   if (typeof rolePermissions === 'string') {
     await interaction.editReply(
@@ -135,7 +127,6 @@ async function handleSetRole(
     return;
   }
 
-  // Warn about administrator permissions
   if (rolePermissions.has('Administrator')) {
     await interaction.editReply(
       '⚠️ **Warning:** This role has Administrator permissions.\n\n' +
@@ -174,7 +165,6 @@ async function handleSetRole(
     }
   }
 
-  // Check for dangerous permissions
   const dangerousPermissions = [
     'ManageGuild',
     'ManageRoles',
@@ -202,7 +192,6 @@ async function handleSetRole(
     );
   }
 
-  // Get or create interval config
   let intervalConfig = await client.intervals.get(interaction.guildId!);
   if (!intervalConfig) {
     intervalConfig = {
@@ -215,7 +204,6 @@ async function handleSetRole(
     intervalConfig.managementRoleId = role.id;
   }
 
-  // Validate the complete configuration
   const configValidation = InputValidator.validateGuildConfig(
     interaction.guildId!,
     intervalConfig
@@ -229,7 +217,6 @@ async function handleSetRole(
 
   await client.intervals.set(interaction.guildId!, intervalConfig);
 
-  // Update cache
   let guildConfig = client.guildConfigs.get(interaction.guildId!) || {
     servers: [],
   };
@@ -264,7 +251,6 @@ async function handleSetRole(
     )
     .setTimestamp();
 
-  // Add role information - with safe property access
   const memberCount = role.members?.size ?? 0;
   const roleColor = role.hexColor ?? '#000000';
 
@@ -288,7 +274,6 @@ async function handleSetRole(
 
   await interaction.editReply({ embeds: [embed] });
 
-  // Log successful role set
   console.log(
     `✅ Management role set to ${role.name} (${role.id}) by ${interaction.user.tag} in guild ${interaction.guild?.name}`
   );
@@ -312,12 +297,10 @@ async function handleRemoveRole(
     interaction.guild!.roles.cache.get(intervalConfig.managementRoleId)?.name ||
     'Unknown Role';
 
-  // Remove the managementRoleId property completely
   delete intervalConfig.managementRoleId;
 
   await client.intervals.set(interaction.guildId!, intervalConfig);
 
-  // Update cache
   let guildConfig = client.guildConfigs.get(interaction.guildId!) || {
     servers: [],
   };

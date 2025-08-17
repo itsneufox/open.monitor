@@ -11,7 +11,9 @@ class DatabaseCleaner {
     guildId: string,
     serverId: string
   ): Promise<{ success: boolean; errors: string[] }> {
-    console.log(`Cleaning up database data for server: ${serverId} in guild: ${guildId}`);
+    console.log(
+      `Cleaning up database data for server: ${serverId} in guild: ${guildId}`
+    );
     const errors: string[] = [];
 
     try {
@@ -122,7 +124,9 @@ class DatabaseCleaner {
     const summary = `Removed ${chartResult.dataPointsRemoved} old chart entries from ${chartResult.serversProcessed} servers`;
 
     if (chartResult.errors.length > 0) {
-      console.warn(`Cleanup completed with ${chartResult.errors.length} errors`);
+      console.warn(
+        `Cleanup completed with ${chartResult.errors.length} errors`
+      );
     } else {
       console.log(`Periodic cleanup completed: ${summary}`);
     }

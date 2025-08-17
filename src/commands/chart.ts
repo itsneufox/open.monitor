@@ -27,9 +27,7 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   if (!interaction.guildId) {
-    await interaction.editReply(
-      'This command can only be used in a server.'
-    );
+    await interaction.editReply('This command can only be used in a server.');
     return;
   }
 
@@ -41,7 +39,8 @@ export async function execute(
       .setDescription('No servers have been configured for this guild.')
       .addFields({
         name: 'Getting Started',
-        value: 'Use `/server add` to configure a SA:MP/open.mp server to monitor.',
+        value:
+          'Use `/server add` to configure a SA:MP/open.mp server to monitor.',
       })
       .setTimestamp();
 
@@ -90,8 +89,13 @@ export async function execute(
   }
 
   try {
-    const serverDataKey = getServerDataKey(interaction.guildId, targetServer.id);
-    const chartData = (await client.maxPlayers.get(serverDataKey)) as ChartData | undefined;
+    const serverDataKey = getServerDataKey(
+      interaction.guildId,
+      targetServer.id
+    );
+    const chartData = (await client.maxPlayers.get(serverDataKey)) as
+      | ChartData
+      | undefined;
 
     if (!chartData || !chartData.days || chartData.days.length === 0) {
       const embed = new EmbedBuilder()
@@ -103,12 +107,14 @@ export async function execute(
         .addFields(
           {
             name: 'Data Collection',
-            value: 'The bot collects player data every 10 minutes when monitoring is enabled.',
+            value:
+              'The bot collects player data every 10 minutes when monitoring is enabled.',
             inline: false,
           },
           {
             name: 'Enable Monitoring',
-            value: 'Use `/monitor setup` to start collecting data automatically.',
+            value:
+              'Use `/monitor setup` to start collecting data automatically.',
             inline: false,
           }
         )
@@ -129,7 +135,8 @@ export async function execute(
         .addFields(
           {
             name: 'Chart Requirements',
-            value: 'At least 2 days of data are needed to generate a meaningful chart.',
+            value:
+              'At least 2 days of data are needed to generate a meaningful chart.',
             inline: false,
           },
           {
@@ -231,8 +238,8 @@ export async function execute(
       const peakDay = recentDays.find(d => d.value === recentMax);
       const dayName = peakDay
         ? new Date(peakDay.date).toLocaleDateString('en-US', {
-          weekday: 'long',
-        })
+            weekday: 'long',
+          })
         : 'Unknown';
 
       embed.addFields({
@@ -246,7 +253,6 @@ export async function execute(
       embeds: [embed],
       files: [chart],
     });
-
   } catch (error) {
     console.error('Error generating chart:', error);
 

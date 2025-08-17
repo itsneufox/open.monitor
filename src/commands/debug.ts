@@ -5,6 +5,7 @@ import {
   MessageFlags,
 } from 'discord.js';
 import { CustomClient } from '../types';
+import { SAMPRateLimitManager } from '../utils/samp/rateLimitManager';
 
 export const data = new SlashCommandBuilder()
   .setName('debug')
@@ -60,6 +61,25 @@ export async function execute(
       .setDescription(`Debug info for ${client.user?.tag}`)
       .setTimestamp();
 
+    let rateLimitingInfo = 'Enhanced rate limiting not initialized';
+    try {
+      if (SAMPRateLimitManager.isInitialized) {
+        const comprehensiveStats = SAMPRateLimitManager.getComprehensiveStats();
+        const healthCheck = await SAMPRateLimitManager.performHealthCheck();
+
+        rateLimitingInfo =
+          `**Backend:** ${comprehensiveStats.rateLimiting.backend}\n` +
+          `**Active Limiters:** ${comprehensiveStats.rateLimiting.totalLimiters}\n` +
+          `**Protected Servers:** ${comprehensiveStats.serverProtection.totalServers}\n` +
+          `**Circuit Breakers Open:** ${comprehensiveStats.serverProtection.activeCircuitBreakers}\n` +
+          `**Cache Hit Rate:** ${Math.round((comprehensiveStats.cache.hitRate || 0) * 100)}%\n` +
+          `**Avg Trust Score:** ${Math.round((comprehensiveStats.serverProtection.averageTrustScore || 1) * 100)}%\n` +
+          `**Health:** ${healthCheck.overall ? '🟢 OK' : '🔴 Issues'}`;
+      }
+    } catch (error) {
+      rateLimitingInfo = 'Error fetching enhanced rate limiting stats';
+    }
+
     embed.addFields({
       name: '📊 Global Statistics',
       value:
@@ -70,6 +90,12 @@ export async function execute(
         `**Memory Usage:** ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB\n` +
         `**Node.js Version:** ${process.version}\n` +
         `**Environment:** ${process.env.NODE_ENV || 'development'}`,
+      inline: false,
+    });
+
+    embed.addFields({
+      name: '🛡️ Enhanced Rate Limiting',
+      value: rateLimitingInfo,
       inline: false,
     });
 
@@ -197,63 +223,82 @@ export async function execute(
       }
     }
 
-    const queueStats = client.rateLimitManager.getQueueStats();
-    if (Object.keys(queueStats).length > 0) {
-      const queueInfo = Object.entries(queueStats)
-        .map(([channelId, stats]) => {
-          const channel = client.channels.cache.get(channelId);
-          const channelName = channel ? `<#${channelId}>` : `Unknown Channel`;
-          return `${channelName} (\`${channelId}\`): ${(stats as any).size} queued`;
-        })
-        .join('\n');
-
-      embed.addFields({
-        name: '⏳ Rate Limit Queues',
-        value: queueInfo,
-        inline: false,
-      });
-    } else {
-      embed.addFields({
-        name: '⏳ Rate Limit Queues',
-        value: 'No active queues',
-        inline: false,
-      });
-    }
-
-    // Add rate limit statistics
     try {
       const { SecurityValidator } = require('../utils/securityValidator');
       const rateLimitStats = SecurityValidator.getRateLimitStats();
+      const securitySummary = SecurityValidator.getSecuritySummary();
       const activeIPs = Object.keys(rateLimitStats).length;
 
+      let securityInfo =
+        `**Active IPs:** ${activeIPs}\n` +
+        `**Banned IPs:** ${securitySummary.bannedIPs}\n` +
+        `**Low Trust IPs:** ${securitySummary.lowTrustIPs}\n` +
+        `**Security Threats:** ${securitySummary.totalThreats} (${securitySummary.criticalThreats} critical)\n` +
+        `**Avg Trust Score:** ${securitySummary.averageTrustScore * 100}%`;
+
       if (activeIPs > 0) {
-        const summary = Object.entries(rateLimitStats)
-          .slice(0, 5) // Show only first 5 IPs to avoid embed limits
+        const topIPs = Object.entries(rateLimitStats)
+          .slice(0, 3)
           .map(
             ([ip, stats]: [string, any]) =>
-              `**${ip}**: ${stats.queriesInLastHour} queries/hour, ${stats.totalGuilds} guilds`
-          )
+              `**${ip}**: ${stats.queriesInLastHour}q/h, ${Math.round(stats.trustScore * 100)}% trust`
+          );
+
+        if (topIPs.length > 0) {
+          securityInfo += '\n\n**Top Active IPs:**\n' + topIPs.join('\n');
+        }
+      }
+
+      embed.addFields({
+        name: '🔒 Security & Behavioral Analysis',
+        value: securityInfo,
+        inline: false,
+      });
+
+      if (securitySummary.criticalThreats > 0) {
+        const threats = SecurityValidator.getSecurityThreats()
+          .filter((t: any) => t.severity === 'critical')
+          .slice(0, 3)
+          .map((t: any) => `• ${t.description}`)
           .join('\n');
 
-        embed.addFields({
-          name: `🛡️ Rate Limiting (${activeIPs} active IPs)`,
-          value: summary || 'No active rate limits',
-          inline: false,
-        });
-      } else {
-        embed.addFields({
-          name: '🛡️ Rate Limiting',
-          value: 'No active rate limits',
-          inline: false,
-        });
+        if (threats) {
+          embed.addFields({
+            name: '⚠️ Critical Security Threats',
+            value: threats,
+            inline: false,
+          });
+        }
       }
     } catch (error) {
       embed.addFields({
-        name: '🛡️ Rate Limiting',
-        value: 'Error fetching rate limit stats',
+        name: '🔒 Security Analysis',
+        value: 'Error fetching security statistics',
         inline: false,
       });
     }
+
+    try {
+      if (SAMPRateLimitManager.isInitialized) {
+        const behavioralStats =
+          SAMPRateLimitManager.getComprehensiveStats().behavioral;
+        if (behavioralStats) {
+          const behaviorInfo =
+            `**Tracked Users:** ${behavioralStats.trackedUsers || 0}\n` +
+            `**Tracked Guilds:** ${behavioralStats.trackedGuilds || 0}\n` +
+            `**Tracked IPs:** ${behavioralStats.trackedIPs || 0}\n` +
+            `**Suspicious Users:** ${behavioralStats.suspiciousEntities?.users || 0}\n` +
+            `**Suspicious Guilds:** ${behavioralStats.suspiciousEntities?.guilds || 0}\n` +
+            `**Suspicious IPs:** ${behavioralStats.suspiciousEntities?.ips || 0}`;
+
+          embed.addFields({
+            name: '🧠 Behavioral Analysis',
+            value: behaviorInfo,
+            inline: false,
+          });
+        }
+      }
+    } catch (error) {}
 
     if (guildList.length > 0) {
       const guildOverview = guildList.join('\n\n');
@@ -310,18 +355,30 @@ export async function execute(
 
             if (chartData?.days) totalChartEntries += chartData.days.length;
             if (uptimeData) totalUptimeEntries++;
-          } catch (error) {
-            // Skip errors for individual servers
-          }
+          } catch (error) {}
         }
       }
 
+      let cacheInfo =
+        `**Chart Data Points:** ${totalChartEntries}\n` +
+        `**Uptime Records:** ${totalUptimeEntries}\n` +
+        `**Database URL:** \`${process.env.DATABASE_URL?.split('@')[1] || 'Not configured'}\``;
+
+      if (SAMPRateLimitManager.isInitialized && SAMPRateLimitManager.cache) {
+        const cacheStats = SAMPRateLimitManager.cache.getStats();
+        const memoryUsage = SAMPRateLimitManager.cache.getMemoryUsage();
+
+        cacheInfo +=
+          `\n\n**Cache Performance:**\n` +
+          `• Hit Rate: ${Math.round(cacheStats.hitRate * 100)}%\n` +
+          `• Stale Hit Rate: ${Math.round(cacheStats.staleHitRate * 100)}%\n` +
+          `• Size: ${cacheStats.size} entries\n` +
+          `• Memory: ${memoryUsage.estimatedMemoryMB}MB`;
+      }
+
       embed.addFields({
-        name: '💾 Database Statistics',
-        value:
-          `**Chart Data Points:** ${totalChartEntries}\n` +
-          `**Uptime Records:** ${totalUptimeEntries}\n` +
-          `**Database URL:** \`${process.env.DATABASE_URL?.split('@')[1] || 'Not configured'}\``,
+        name: '💾 Database & Cache Statistics',
+        value: cacheInfo,
         inline: false,
       });
     } catch (error) {
@@ -333,7 +390,7 @@ export async function execute(
     }
 
     const footerOptions: { text: string; iconURL?: string } = {
-      text: `Owner Debug Panel • Process ID: ${process.pid} • Discord.js v${require('discord.js').version}`,
+      text: `Enhanced Owner Debug Panel • Process ID: ${process.pid} • Discord.js v${require('discord.js').version}`,
     };
 
     const botAvatarURL = client.user?.displayAvatarURL();

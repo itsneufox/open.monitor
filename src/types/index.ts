@@ -1,6 +1,5 @@
 import { Client, Collection } from 'discord.js';
 import Keyv from 'keyv';
-import { RateLimitManager } from '../utils/rateLimitManager';
 
 export interface ServerConfig {
   id: string;
@@ -83,7 +82,6 @@ export interface CustomClient extends Client {
   intervals: Keyv<IntervalConfig>;
   maxPlayers: Keyv<ChartData>;
   uptimes: Keyv<UptimeStats>;
-  rateLimitManager: RateLimitManager;
   guildConfigs: Collection<string, GuildConfig>;
 }
 

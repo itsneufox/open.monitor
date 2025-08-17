@@ -11,9 +11,7 @@ export const data = new SlashCommandBuilder()
   .setName('server')
   .setDescription('Manage SA:MP/open.mp servers')
   .addSubcommand(subcommand =>
-    subcommand
-      .setName('add')
-      .setDescription('Add a new server')
+    subcommand.setName('add').setDescription('Add a new server')
   )
   .addSubcommand(subcommand =>
     subcommand.setName('list').setDescription('Show all configured servers')
@@ -42,7 +40,9 @@ export const data = new SlashCommandBuilder()
       .addStringOption(option =>
         option
           .setName('server')
-          .setDescription('Which server to check (leave empty for active server)')
+          .setDescription(
+            'Which server to check (leave empty for active server)'
+          )
           .setRequired(false)
           .setAutocomplete(true)
       )

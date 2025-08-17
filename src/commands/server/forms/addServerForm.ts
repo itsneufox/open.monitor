@@ -70,12 +70,20 @@ export interface ParsedServerForm {
   dayResetHour: number;
 }
 
-export function parseAddServerForm(interaction: ModalSubmitInteraction): ParsedServerForm | { error: string } {
-  const name = interaction.fields.getTextInputValue('server_name').trim() || null;
+export function parseAddServerForm(
+  interaction: ModalSubmitInteraction
+): ParsedServerForm | { error: string } {
+  const name =
+    interaction.fields.getTextInputValue('server_name').trim() || null;
   const ip = interaction.fields.getTextInputValue('server_ip').trim();
   const portInput = interaction.fields.getTextInputValue('server_port').trim();
-  const timezone = interaction.fields.getTextInputValue('server_timezone').trim().toUpperCase();
-  const dayResetInput = interaction.fields.getTextInputValue('day_reset_hour').trim();
+  const timezone = interaction.fields
+    .getTextInputValue('server_timezone')
+    .trim()
+    .toUpperCase();
+  const dayResetInput = interaction.fields
+    .getTextInputValue('day_reset_hour')
+    .trim();
 
   if (!ip) {
     return { error: 'IP address is required.' };
@@ -85,25 +93,36 @@ export function parseAddServerForm(interaction: ModalSubmitInteraction): ParsedS
   if (portInput) {
     const parsedPort = parseInt(portInput);
     if (isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
-      return { error: 'Invalid port number. Please enter a number between 1 and 65535.' };
+      return {
+        error:
+          'Invalid port number. Please enter a number between 1 and 65535.',
+      };
     }
     port = parsedPort;
   }
 
   if (!timezone.startsWith('GMT')) {
-    return { error: 'Timezone must be in GMT format (e.g., GMT+2, GMT-5, GMT+0).' };
+    return {
+      error: 'Timezone must be in GMT format (e.g., GMT+2, GMT-5, GMT+0).',
+    };
   }
 
   const { TimezoneHelper } = require('../../../utils/timezoneHelper');
   if (!TimezoneHelper.validateGMT(timezone)) {
-    return { error: 'Invalid GMT timezone. Use format GMT+X or GMT-X where X is between -12 and +14.' };
+    return {
+      error:
+        'Invalid GMT timezone. Use format GMT+X or GMT-X where X is between -12 and +14.',
+    };
   }
 
   let dayResetHour = 0;
   if (dayResetInput) {
     const parsedHour = parseInt(dayResetInput);
     if (isNaN(parsedHour) || !TimezoneHelper.validateDayResetHour(parsedHour)) {
-      return { error: 'Invalid day reset hour. Must be between 0 (midnight) and 23 (11 PM).' };
+      return {
+        error:
+          'Invalid day reset hour. Must be between 0 (midnight) and 23 (11 PM).',
+      };
     }
     dayResetHour = parsedHour;
   }
