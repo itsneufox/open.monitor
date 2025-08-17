@@ -1,9 +1,9 @@
 name: Deploy Nightly
 
 on:
-  push:
-    branches: [nightly]
-  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch: 
 
 jobs:
   deploy:
