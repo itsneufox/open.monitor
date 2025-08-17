@@ -348,5 +348,4 @@ We reserve the right to modify these Terms at any time. Changes will be effectiv
 **Website: https://itsneufox.xyz | GitHub: https://github.com/itsneufox/open.monitor**
 
 ---
-
-*This Terms of Service document is designed to be comprehensive and protective while remaining fair to users. It addresses the specific functionality of the open.monitor bot including server monitoring, data collection, rate limiting, and security measures implemented in the codebase.*
+**TL;DR**: We monitor SA:MP/open.mp servers for you, store minimal data (30 days max), respect your privacy, implement strong rate limiting, and believe in transparency. You must be 13+ to use this bot and follow fair use guidelines. Full source code available on GitHub.
