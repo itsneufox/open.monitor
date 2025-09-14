@@ -80,10 +80,10 @@ async function handleAddFormSubmission(
   if (!canQueryServer(ip, interaction.guildId!)) {
     await interaction.editReply(
       '❌ Rate limit exceeded for this IP address. Please try again later.\n\n' +
-        '**Rate limits:**\n' +
-        '• Maximum 12 queries per hour per IP\n' +
-        '• Maximum 3 different Discord servers per IP\n' +
-        '• Minimum 30 seconds between queries'
+      '**Rate limits:**\n' +
+      '• Maximum 12 queries per hour per IP\n' +
+      '• Maximum 3 different Discord servers per IP\n' +
+      '• Minimum 30 seconds between queries'
     );
     return;
   }
@@ -143,10 +143,20 @@ async function handleAddFormSubmission(
       );
     }
 
-    if (existingServers.length > 10) {
-      await interaction.editReply(
-        '❌ Maximum of 10 servers per Discord server allowed. Remove a server first with `/server remove`.'
-      );
+    // Check premium status for server limit
+    const intervalConfig = await client.intervals.get(interaction.guildId!);
+    const isPremium = !!(intervalConfig?.isPremium &&
+      intervalConfig.premiumExpires &&
+      intervalConfig.premiumExpires > Date.now());
+
+    const maxServers = isPremium ? 5 : 1;
+
+    if (existingServers.length >= maxServers) {
+      const limitMessage = isPremium
+        ? '❌ Premium users can monitor up to 5 servers. Remove a server first with `/server remove`.'
+        : '❌ Free users can monitor 1 server. Upgrade to premium to monitor up to 5 servers with `/premium features`.';
+
+      await interaction.editReply(limitMessage);
       return;
     }
 

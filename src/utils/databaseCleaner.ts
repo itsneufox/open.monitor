@@ -84,9 +84,17 @@ class DatabaseCleaner {
     let serversProcessed = 0;
     let dataPointsRemoved = 0;
 
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-
     for (const [guildId, guildConfig] of this.client.guildConfigs.entries()) {
+      // Check if guild has premium
+      const intervalConfig = await this.client.intervals.get(guildId);
+      const isPremium = !!(intervalConfig?.isPremium &&
+        intervalConfig.premiumExpires &&
+        intervalConfig.premiumExpires > Date.now());
+
+      // Premium users get 90 days, free users get 30 days
+      const retentionDays = isPremium ? 90 : 30;
+      const cutoffTime = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+
       for (const server of guildConfig.servers) {
         try {
           const serverDataKey = getServerDataKey(guildId, server.id);
@@ -94,7 +102,7 @@ class DatabaseCleaner {
           if (chartData?.days) {
             const originalLength = chartData.days.length;
             chartData.days = chartData.days.filter(
-              day => day.date > thirtyDaysAgo
+              day => day.date > cutoffTime
             );
             const newLength = chartData.days.length;
 
@@ -102,7 +110,7 @@ class DatabaseCleaner {
               await this.client.maxPlayers.set(serverDataKey, chartData);
               dataPointsRemoved += originalLength - newLength;
               console.log(
-                `Removed ${originalLength - newLength} old data points from ${serverDataKey}`
+                `Removed ${originalLength - newLength} old data points from ${serverDataKey} (${retentionDays} day retention)`
               );
             }
           }

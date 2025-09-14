@@ -29,15 +29,43 @@ export async function handleActivate(
   }
 
   let intervalConfig = await client.intervals.get(interaction.guildId!);
+
+  // Check if user has premium
+  const isPremium = !!(intervalConfig?.isPremium &&
+    intervalConfig.premiumExpires &&
+    intervalConfig.premiumExpires > Date.now());
   if (!intervalConfig) {
     intervalConfig = {
-      activeServerId: server.id,
+      activeServerId: server.id, // Legacy support
+      activeServerIds: [server.id], // New format
       enabled: false,
       next: Date.now(),
       statusMessage: null,
     };
   } else {
-    intervalConfig.activeServerId = server.id;
+    if (isPremium) {
+      // Premium: Add to active servers list (up to 5)
+      if (!intervalConfig.activeServerIds) {
+        intervalConfig.activeServerIds = [];
+      }
+
+      if (!intervalConfig.activeServerIds.includes(server.id)) {
+        if (intervalConfig.activeServerIds.length >= 5) {
+          await interaction.editReply(
+            '❌ Premium users can have up to 5 active servers. Remove one first with `/server deactivate`.'
+          );
+          return;
+        }
+        intervalConfig.activeServerIds.push(server.id);
+      }
+
+      // Keep legacy field for backward compatibility
+      intervalConfig.activeServerId = intervalConfig.activeServerIds[0]!;
+    } else {
+      // Free: Single server only - replace any existing active server
+      intervalConfig.activeServerId = server.id;
+      intervalConfig.activeServerIds = [server.id];
+    }
     intervalConfig.statusMessage = null;
   }
 

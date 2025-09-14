@@ -18,7 +18,8 @@ export interface SimpleServer {
 }
 
 export interface IntervalConfig {
-  activeServerId?: string;
+  activeServerId?: string; // Legacy - for backward compatibility
+  activeServerIds?: string[]; // New - for multiple active servers
   statusChannel?: string;
   chartChannel?: string;
   serverIpChannel?: string;
@@ -30,6 +31,8 @@ export interface IntervalConfig {
   dataLossNotificationSent?: boolean;
   preferredLanguage?: 'en' | 'pt' | 'es';
   lastVoiceUpdate?: number;
+  isPremium?: boolean;
+  premiumExpires?: number;
 }
 
 export interface ChartData {
@@ -75,6 +78,7 @@ export interface GuildConfig {
   servers: ServerConfig[];
   interval?: IntervalConfig;
 }
+
 
 export interface CustomClient extends Client {
   commands: Collection<string, any>;

@@ -20,7 +20,8 @@ const chartJSNodeCanvas = new ChartJSNodeCanvas({
 
 export async function generateChart(
   data: ChartData,
-  color: number
+  color: number,
+  isPremium: boolean = false
 ): Promise<AttachmentBuilder> {
   const chartData = (data as any).value ? (data as any).value : data;
 
@@ -79,12 +80,12 @@ export async function generateChart(
     firstDate.getFullYear() === lastDate.getFullYear()
   ) {
     const monthName = firstDate.toLocaleDateString('en-US', { month: 'long' });
-    titleText = `Peak Players - ${monthName} ${firstDate.getFullYear()} (${timezone})`;
+    titleText = `${isPremium ? '✨ ' : ''}Peak Players - ${monthName} ${firstDate.getFullYear()} (${timezone})`;
   } else {
     const startMonth = firstDate.toLocaleDateString('en-US', { month: 'long' });
     const endMonth = lastDate.toLocaleDateString('en-US', { month: 'long' });
     const year = lastDate.getFullYear();
-    titleText = `Peak Players - ${startMonth} to ${endMonth} ${year} (${timezone})`;
+    titleText = `${isPremium ? '✨ ' : ''}Peak Players - ${startMonth} to ${endMonth} ${year} (${timezone})`;
   }
 
   let xAxisTitle = '';

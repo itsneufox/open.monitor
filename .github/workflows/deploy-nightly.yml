@@ -34,7 +34,34 @@ jobs:
           sudo ln -sf python3 /usr/bin/python
         fi
 
+    - name: Check for changes
+      run: |
+        echo "Checking for changes since last deployment..."
+        
+        # Get the last nightly tag
+        LAST_TAG=$(git describe --tags --match "v*-nightly" --abbrev=0 2>/dev/null || echo "")
+        
+        if [ -z "$LAST_TAG" ]; then
+          echo "No previous nightly tags found. Proceeding with deployment."
+          echo "SHOULD_DEPLOY=true" >> $GITHUB_ENV
+        else
+          echo "Last nightly tag: $LAST_TAG"
+          
+          # Check if there are commits since the last tag
+          COMMITS_SINCE_LAST=$(git rev-list --count $LAST_TAG..HEAD 2>/dev/null || echo "0")
+          echo "Commits since last deployment: $COMMITS_SINCE_LAST"
+          
+          if [ "$COMMITS_SINCE_LAST" -gt 0 ]; then
+            echo "✅ Found $COMMITS_SINCE_LAST new commits. Proceeding with deployment."
+            echo "SHOULD_DEPLOY=true" >> $GITHUB_ENV
+          else
+            echo "⏭️ No new commits since last deployment. Skipping deployment."
+            echo "SHOULD_DEPLOY=false" >> $GITHUB_ENV
+          fi
+        fi
+
     - name: Version management
+      if: env.SHOULD_DEPLOY == 'true'
       run: |
         git config --local user.email "mission-control@open-monitor.space"
         git config --local user.name "🛰️ Mission Control"
@@ -58,6 +85,7 @@ jobs:
         git push origin "v$NEW_VERSION-nightly"
 
     - name: Configure environment
+      if: env.SHOULD_DEPLOY == 'true'
       run: |
         echo "Creating .env file directly..."
         
@@ -85,6 +113,7 @@ jobs:
         fi
 
     - name: Deploy application
+      if: env.SHOULD_DEPLOY == 'true'
       run: |
         echo "Stopping existing nightly containers..."
         sudo docker-compose -f /opt/open.monitor-nightly/docker-compose.nightly.yml down --timeout 30 || true
@@ -129,7 +158,20 @@ jobs:
         
         sudo docker system prune -f
 
+    - name: Skip deployment message
+      if: env.SHOULD_DEPLOY == 'false'
+      run: |
+        echo "================================="
+        echo "Nightly Deployment Skipped"
+        echo "================================="
+        echo "Reason: No new commits since last deployment"
+        echo "Time: $(date -u)"
+        echo "Status: ⏭️ Skipped (No Changes)"
+        echo "Branch: nightly"
+        echo "================================="
+
     - name: Deployment summary
+      if: env.SHOULD_DEPLOY == 'true'
       run: |
         BASE_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
         echo "================================="

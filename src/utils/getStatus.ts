@@ -11,7 +11,8 @@ export async function getStatus(
   guildId: string = 'unknown',
   isMonitoring: boolean = false,
   userId?: string,
-  isManualCommand: boolean = false
+  isManualCommand: boolean = false,
+  isPremium: boolean = false
 ): Promise<EmbedBuilder> {
   const embed = new EmbedBuilder().setColor(color).setTimestamp();
 
@@ -24,10 +25,10 @@ export async function getStatus(
       userId
     );
 
-    
+
     if (playerInfo.error && playerInfo.error.includes('rate limit')) {
       embed
-        .setTitle('Server Status (Rate Limited)')
+        .setTitle(`${isPremium ? '✨ ' : ''}Server Status (Rate Limited)`)
         .setDescription(
           `**${playerInfo.name}**\n\`${server.ip}:${server.port}\``
         )
@@ -54,14 +55,14 @@ export async function getStatus(
     if (!playerInfo.isOnline) {
       const errorMsg = playerInfo.error || 'Server is offline or unreachable';
       return embed
-        .setTitle('Server Status')
+        .setTitle(`${isPremium ? '✨ ' : ''}Server Status`)
         .setDescription(
           `**${server.name}**\n\`${server.ip}:${server.port}\`\n❌ ${errorMsg}`
         );
     }
 
     try {
-      
+
       const metadata = await sampQuery.getServerMetadata(
         server,
         guildId,
@@ -71,8 +72,8 @@ export async function getStatus(
 
       if (metadata) {
         const statusTitle = metadata.isOpenMP
-          ? 'open.mp Server Status'
-          : 'SA:MP Server Status';
+          ? `${isPremium ? '✨ ' : ''}open.mp Server Status`
+          : `${isPremium ? '✨ ' : ''}SA:MP Server Status`;
 
         embed
           .setTitle(statusTitle)
@@ -100,7 +101,7 @@ export async function getStatus(
               value: metadata.version || 'Unknown',
               inline: true,
             },
-            { name: 'Password', value: 'No', inline: true }, 
+            { name: 'Password', value: 'No', inline: true },
             { name: 'Status', value: '✅ Online', inline: true }
           );
 
@@ -117,7 +118,7 @@ export async function getStatus(
       console.log('Could not get detailed metadata, trying cache...');
     }
 
-    
+
     try {
       const { ServerMetadataCache } = await import('./serverCache');
       const metadata = await ServerMetadataCache.getMetadata(
@@ -128,8 +129,8 @@ export async function getStatus(
 
       if (metadata) {
         const statusTitle = metadata.isOpenMP
-          ? 'open.mp Server Status'
-          : 'SA:MP Server Status';
+          ? `${isPremium ? '✨ ' : ''}open.mp Server Status`
+          : `${isPremium ? '✨ ' : ''}SA:MP Server Status`;
 
         embed
           .setTitle(statusTitle)
@@ -174,9 +175,9 @@ export async function getStatus(
       console.log('Cache metadata also failed, using basic status');
     }
 
-    
+
     embed
-      .setTitle('Server Status')
+      .setTitle(`${isPremium ? '✨ ' : ''}Server Status`)
       .setDescription(`**${playerInfo.name}**\n\`${server.ip}:${server.port}\``)
       .addFields(
         {
@@ -195,7 +196,7 @@ export async function getStatus(
   } catch (error) {
     console.error('Error getting server status:', error);
     return embed
-      .setTitle('Server Status')
+      .setTitle(`${isPremium ? '✨ ' : ''}Server Status`)
       .setDescription(
         `**${server.name}**\n\`${server.ip}:${server.port}\`\n❌ Bot experiencing issues - try again later`
       );

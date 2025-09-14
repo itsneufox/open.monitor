@@ -54,16 +54,42 @@ export async function execute(client: CustomClient): Promise<void> {
     console.error('Error loading guild configurations:', error);
   }
 
-  
+
+  // Premium monitoring (3 minutes)
   setInterval(async () => {
     for (const guild of client.guilds.cache.values()) {
       try {
-        await processGuildMonitoring(guild, client, isProduction);
+        const guildConfig = client.guildConfigs.get(guild.id);
+        const isPremium = !!(guildConfig?.interval?.isPremium &&
+          guildConfig.interval.premiumExpires &&
+          guildConfig.interval.premiumExpires > Date.now());
+
+        if (isPremium) {
+          await processGuildMonitoring(guild, client, isProduction);
+        }
       } catch (error) {
-        console.error(`Error processing guild ${guild.name}:`, error);
+        console.error(`Error processing premium guild ${guild.name}:`, error);
       }
     }
-  }, 300000);
+  }, 180000); // 3 minutes
+
+  // Free monitoring (10 minutes)
+  setInterval(async () => {
+    for (const guild of client.guilds.cache.values()) {
+      try {
+        const guildConfig = client.guildConfigs.get(guild.id);
+        const isPremium = !!(guildConfig?.interval?.isPremium &&
+          guildConfig.interval.premiumExpires &&
+          guildConfig.interval.premiumExpires > Date.now());
+
+        if (!isPremium) {
+          await processGuildMonitoring(guild, client, isProduction);
+        }
+      } catch (error) {
+        console.error(`Error processing free guild ${guild.name}:`, error);
+      }
+    }
+  }, 600000); // 10 minutes
 
   setInterval(() => {
     try {
@@ -105,64 +131,102 @@ async function processGuildMonitoring(
   isProduction: boolean
 ): Promise<void> {
   const guildConfig = client.guildConfigs.get(guild.id);
-  if (!guildConfig?.interval?.enabled || !guildConfig.interval.activeServerId)
-    return;
+  if (!guildConfig?.interval?.enabled) return;
 
   const { interval, servers } = guildConfig;
-  const activeServer = servers.find(s => s.id === interval.activeServerId);
-  if (!activeServer) return;
 
-  const { SecurityValidator } = require('../utils/securityValidator');
-  const canQuery = await SecurityValidator.canQueryIP(
-    activeServer.ip,
-    guild.id,
-    true
-  );
-
-  if (!canQuery.allowed) {
-    console.log(
-      `Skipping monitoring for ${activeServer.ip}: ${canQuery.reason}`
-    );
-    return;
+  // Get active servers (support both old and new format)
+  let activeServerIds: string[] = [];
+  if (interval.activeServerIds && interval.activeServerIds.length > 0) {
+    // New format: multiple active servers
+    activeServerIds = interval.activeServerIds;
+  } else if (interval.activeServerId) {
+    // Legacy format: single active server
+    activeServerIds = [interval.activeServerId];
   }
 
+  if (activeServerIds.length === 0) return;
+
+  const activeServers = servers.filter(s => activeServerIds.includes(s.id));
+  if (activeServers.length === 0) return;
+
+  const { SecurityValidator } = require('../utils/securityValidator');
   const now = Date.now();
   const statusUpdateDue = now >= (interval.next || 0);
   const voiceUpdateDue = now - (interval.lastVoiceUpdate || 0) >= 600000;
 
   if (!statusUpdateDue && !voiceUpdateDue) return;
 
-  const info = await getPlayerCount(activeServer, guild.id, true);
+  // Process each active server
+  const serverResults: Array<{ server: any, info: any, canQuery: any }> = [];
 
-  await SecurityValidator.recordQuerySuccess(
-    activeServer.ip,
-    info.isOnline ? 1000 : 5000,
-    guild.id
-  );
+  for (const activeServer of activeServers) {
+    const canQuery = await SecurityValidator.canQueryIP(
+      activeServer.ip,
+      guild.id,
+      true
+    );
 
-  await updateChartData(
-    client,
-    guild.id,
-    activeServer,
-    info,
-    interval,
-    isProduction
-  );
-  await updateUptimeStats(client, guild.id, activeServer, info);
+    if (!canQuery.allowed) {
+      console.log(
+        `Skipping monitoring for ${activeServer.ip}: ${canQuery.reason}`
+      );
+      continue;
+    }
 
-  if (statusUpdateDue && interval.statusChannel) {
+    const info = await getPlayerCount(activeServer, guild.id, true);
+
+    await SecurityValidator.recordQuerySuccess(
+      activeServer.ip,
+      info.isOnline ? 1000 : 5000,
+      guild.id
+    );
+
+    await updateChartData(
+      client,
+      guild.id,
+      activeServer,
+      info,
+      interval,
+      isProduction
+    );
+    await updateUptimeStats(client, guild.id, activeServer, info);
+
+    serverResults.push({ server: activeServer, info, canQuery });
+  }
+
+  // Update status channel with all servers if due
+  if (statusUpdateDue && interval.statusChannel && serverResults.length > 0) {
     await updateStatusChannel(
       client,
       guild,
       interval,
-      activeServer,
+      serverResults,
       isProduction
     );
     interval.next = now + 300000;
   }
 
-  if (voiceUpdateDue && interval.playerCountChannel) {
-    await updateVoiceChannels(client, guild, interval, info, isProduction);
+  // Update voice channels with total players from all active servers
+  if (voiceUpdateDue && interval.playerCountChannel && serverResults.length > 0) {
+    // Calculate total players from all active servers
+    const totalPlayers = serverResults.reduce((sum, { info }) => {
+      return sum + (info.isOnline ? info.players : 0);
+    }, 0);
+
+    const totalMaxPlayers = serverResults.reduce((sum, { info }) => {
+      return sum + (info.isOnline ? info.maxPlayers : 0);
+    }, 0);
+
+    // Create combined info object for voice channel
+    const combinedInfo = {
+      ...serverResults[0]!.info,
+      players: totalPlayers,
+      maxPlayers: totalMaxPlayers,
+      isOnline: serverResults.some(({ info }) => info.isOnline)
+    };
+
+    await updateVoiceChannels(client, guild, interval, combinedInfo, isProduction);
     interval.lastVoiceUpdate = now;
   }
 
@@ -221,8 +285,15 @@ async function updateChartData(
         dayResetHour: activeServer.dayResetHour,
       });
 
-      if (chartData.days.length > 30) {
-        chartData.days = chartData.days.slice(-30);
+      // Check premium status for data retention
+      const intervalConfig = await client.intervals.get(guildId);
+      const isPremium = !!(intervalConfig?.isPremium &&
+        intervalConfig.premiumExpires &&
+        intervalConfig.premiumExpires > Date.now());
+
+      const maxDays = isPremium ? 90 : 30;
+      if (chartData.days.length > maxDays) {
+        chartData.days = chartData.days.slice(-maxDays);
       }
 
       if (interval.chartChannel && chartData.days.length >= 2) {
@@ -236,7 +307,10 @@ async function updateChartData(
 
           if (chartChannel) {
             const color = getRoleColor(guildObj);
-            const chart = await getChart(chartData, color);
+            const isPremium = !!(intervalConfig?.isPremium &&
+              intervalConfig.premiumExpires &&
+              intervalConfig.premiumExpires > Date.now());
+            const chart = await getChart(chartData, color, isPremium);
 
             if (chartData.msg) {
               try {
@@ -244,8 +318,10 @@ async function updateChartData(
                   chartData.msg
                 );
                 await oldMessage.delete();
-              } catch (error) {
-                console.log(`Could not delete old chart message: ${error}`);
+              } catch (error: any) {
+                console.log(`Could not delete old chart message: ${error.message}`);
+                // Clear the invalid message ID
+                delete chartData.msg;
               }
             }
 
@@ -303,7 +379,7 @@ async function updateStatusChannel(
   client: CustomClient,
   guild: any,
   interval: any,
-  activeServer: any,
+  serverResults: Array<{ server: any, info: any, canQuery: any }>,
   isProduction: boolean
 ): Promise<void> {
   try {
@@ -314,7 +390,16 @@ async function updateStatusChannel(
     if (!statusChannel) return;
 
     const color = getRoleColor(guild);
-    const serverEmbed = await getStatus(activeServer, color, guild.id, true);
+    const isPremium = !!(interval.isPremium &&
+      interval.premiumExpires &&
+      interval.premiumExpires > Date.now());
+
+    // Create embeds for all servers
+    const embeds = [];
+    for (const { server, info } of serverResults) {
+      const serverEmbed = await getStatus(server, color, guild.id, true, undefined, false, isPremium);
+      embeds.push(serverEmbed);
+    }
 
     let messageUpdated = false;
 
@@ -323,20 +408,24 @@ async function updateStatusChannel(
         const existingMsg = await statusChannel.messages.fetch(
           interval.statusMessage
         );
-        await existingMsg.edit({ embeds: [serverEmbed] });
+        await existingMsg.edit({ embeds });
         if (!isProduction) {
-          console.log(`Updated status message in ${guild.name} (5min cycle)`);
+          console.log(`Updated status message in ${guild.name} (${serverResults.length} servers)`);
         }
         messageUpdated = true;
-      } catch (error) { }
+      } catch (error: any) {
+        console.log(`Failed to edit status message in ${guild.name}: ${error.message}`);
+        // Clear the invalid message ID so we create a new one
+        interval.statusMessage = null;
+      }
     }
 
     if (!messageUpdated) {
       try {
-        const newMsg = await statusChannel.send({ embeds: [serverEmbed] });
+        const newMsg = await statusChannel.send({ embeds });
         interval.statusMessage = newMsg.id;
         if (!isProduction) {
-          console.log(`Created new status message in ${guild.name}`);
+          console.log(`Created new status message in ${guild.name} (${serverResults.length} servers)`);
         }
       } catch (sendError) {
         console.error(`Failed to send status message:`, sendError);

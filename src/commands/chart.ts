@@ -177,12 +177,18 @@ export async function execute(
       }
     }
 
+    // Check if guild has premium
+    const intervalConfig = await client.intervals.get(interaction.guildId);
+    const isPremium = !!(intervalConfig?.isPremium &&
+      intervalConfig.premiumExpires &&
+      intervalConfig.premiumExpires > Date.now());
+
     const color = getRoleColor(interaction.guild!);
-    const chart = await getChart(chartData, color);
+    const chart = await getChart(chartData, color, isPremium);
 
     const embed = new EmbedBuilder()
       .setColor(color)
-      .setTitle(`Player Activity Analysis`)
+      .setTitle(`${isPremium ? '✨ ' : ''}Player Activity Analysis`)
       .setDescription(
         `**${targetServer.name}**\n\`${targetServer.ip}:${targetServer.port}\``
       )
@@ -211,14 +217,15 @@ export async function execute(
       .setTimestamp();
 
     const guildIconURL = interaction.guild?.iconURL();
+    const monitoringInterval = isPremium ? '3 minutes' : '10 minutes';
     if (guildIconURL) {
       embed.setFooter({
-        text: `Data collected every 10 minutes • Last updated`,
+        text: `Data collected every ${monitoringInterval} • Last updated`,
         iconURL: guildIconURL,
       });
     } else {
       embed.setFooter({
-        text: `Data collected every 10 minutes • Last updated`,
+        text: `Data collected every ${monitoringInterval} • Last updated`,
       });
     }
 
@@ -238,8 +245,8 @@ export async function execute(
       const peakDay = recentDays.find(d => d.value === recentMax);
       const dayName = peakDay
         ? new Date(peakDay.date).toLocaleDateString('en-US', {
-            weekday: 'long',
-          })
+          weekday: 'long',
+        })
         : 'Unknown';
 
       embed.addFields({

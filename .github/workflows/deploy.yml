@@ -37,7 +37,34 @@ jobs:
           exit 1
         fi
 
+    - name: Check for changes
+      run: |
+        echo "Checking for changes since last production deployment..."
+        
+        # Get the last production tag (not nightly)
+        LAST_TAG=$(git describe --tags --match "v*" --exclude "*-nightly" --abbrev=0 2>/dev/null || echo "")
+        
+        if [ -z "$LAST_TAG" ]; then
+          echo "No previous production tags found. Proceeding with deployment."
+          echo "SHOULD_DEPLOY=true" >> $GITHUB_ENV
+        else
+          echo "Last production tag: $LAST_TAG"
+          
+          # Check if there are commits since the last tag
+          COMMITS_SINCE_LAST=$(git rev-list --count $LAST_TAG..HEAD 2>/dev/null || echo "0")
+          echo "Commits since last deployment: $COMMITS_SINCE_LAST"
+          
+          if [ "$COMMITS_SINCE_LAST" -gt 0 ]; then
+            echo "✅ Found $COMMITS_SINCE_LAST new commits. Proceeding with deployment."
+            echo "SHOULD_DEPLOY=true" >> $GITHUB_ENV
+          else
+            echo "⏭️ No new commits since last deployment. Skipping deployment."
+            echo "SHOULD_DEPLOY=false" >> $GITHUB_ENV
+          fi
+        fi
+
     - name: Version management
+      if: env.SHOULD_DEPLOY == 'true'
       run: |
         git config --local user.email "mission-control@open-monitor.space"
         git config --local user.name "🛰️ Mission Control"
@@ -61,6 +88,7 @@ jobs:
         git push origin "v$NEW_VERSION"
 
     - name: Configure environment
+      if: env.SHOULD_DEPLOY == 'true'
       run: |
         cat > .env << EOF
         TOKEN=${{ secrets.DISCORD_TOKEN }}
@@ -78,6 +106,7 @@ jobs:
         EOF
 
     - name: Deploy application
+      if: env.SHOULD_DEPLOY == 'true'
       run: |
         echo "Stopping existing containers..."
         sudo docker-compose -f /opt/open.monitor/docker-compose.yml down --timeout 30 || true
@@ -115,7 +144,21 @@ jobs:
         
         sudo docker system prune -f
 
+    - name: Skip deployment message
+      if: env.SHOULD_DEPLOY == 'false'
+      run: |
+        echo "================================="
+        echo "Production Deployment Skipped"
+        echo "================================="
+        echo "Reason: No new commits since last deployment"
+        echo "Time: $(date -u)"
+        echo "Status: ⏭️ Skipped (No Changes)"
+        echo "Branch: production"
+        echo "Next check: Tomorrow at 03:00 UTC"
+        echo "================================="
+
     - name: Deployment summary
+      if: env.SHOULD_DEPLOY == 'true'
       run: |
         CURRENT_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
         echo "================================="

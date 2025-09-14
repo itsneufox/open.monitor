@@ -40,8 +40,16 @@ export async function handleList(
     )
     .setTimestamp();
 
+  // Get active server IDs (support both old and new format)
+  let activeServerIds: string[] = [];
+  if (intervalConfig?.activeServerIds && intervalConfig.activeServerIds.length > 0) {
+    activeServerIds = intervalConfig.activeServerIds;
+  } else if (intervalConfig?.activeServerId) {
+    activeServerIds = [intervalConfig.activeServerId];
+  }
+
   for (const server of servers) {
-    const isActive = intervalConfig?.activeServerId === server.id;
+    const isActive = activeServerIds.includes(server.id);
     const addedDate = new Date(server.addedAt).toLocaleDateString();
 
     embed.addFields({
@@ -51,16 +59,15 @@ export async function handleList(
     });
   }
 
-  if (intervalConfig?.activeServerId) {
-    const activeServer = servers.find(
-      s => s.id === intervalConfig.activeServerId
-    );
+  if (activeServerIds.length > 0) {
+    const activeServers = servers.filter(s => activeServerIds.includes(s.id));
+    const serverNames = activeServers.map(s => s.name).join(', ');
     embed.setFooter({
-      text: `Currently monitoring: ${activeServer?.name || 'Unknown'}`,
+      text: `Currently monitoring: ${serverNames} (${activeServerIds.length} server${activeServerIds.length === 1 ? '' : 's'})`,
     });
   } else {
     embed.setFooter({
-      text: 'No active server set - use /server activate to choose one',
+      text: 'No active servers set - use /server activate to choose one',
     });
   }
 

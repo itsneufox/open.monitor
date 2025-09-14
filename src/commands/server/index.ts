@@ -4,6 +4,7 @@ import { checkPermissionOrReply } from '../../utils/permissions';
 import { handleAdd } from './handlers/add';
 import { handleList } from './handlers/list';
 import { handleActivate } from './handlers/activate';
+import { handleDeactivate } from './handlers/deactivate';
 import { handleRemove } from './handlers/remove';
 import { handleStatus } from './handlers/status';
 
@@ -32,6 +33,18 @@ export const data = new SlashCommandBuilder()
     subcommand
       .setName('remove')
       .setDescription('Remove a server and all its data')
+  )
+  .addSubcommand(subcommand =>
+    subcommand
+      .setName('deactivate')
+      .setDescription('Remove a server from active monitoring')
+      .addStringOption(option =>
+        option
+          .setName('server')
+          .setDescription('Server to deactivate')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
   )
   .addSubcommand(subcommand =>
     subcommand
@@ -75,6 +88,9 @@ export async function execute(
       break;
     case 'activate':
       await handleActivate(interaction, client);
+      break;
+    case 'deactivate':
+      await handleDeactivate(interaction, client);
       break;
     case 'remove':
       await handleRemove(interaction, client);
