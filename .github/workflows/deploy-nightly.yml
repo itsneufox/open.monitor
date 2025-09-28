@@ -47,9 +47,9 @@ jobs:
         else
           echo "Last nightly tag: $LAST_TAG"
           
-          # Check if there are commits since the last tag
-          COMMITS_SINCE_LAST=$(git rev-list --count $LAST_TAG..HEAD 2>/dev/null || echo "0")
-          echo "Commits since last deployment: $COMMITS_SINCE_LAST"
+          # Check if there are commits since the last tag (excluding release commits)
+          COMMITS_SINCE_LAST=$(git rev-list --count $LAST_TAG..HEAD --grep="🚀.*release" --invert-grep 2>/dev/null || echo "0")
+          echo "Commits since last deployment (excluding releases): $COMMITS_SINCE_LAST"
           
           if [ "$COMMITS_SINCE_LAST" -gt 0 ]; then
             echo "✅ Found $COMMITS_SINCE_LAST new commits. Proceeding with deployment."
