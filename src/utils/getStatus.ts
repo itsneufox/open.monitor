@@ -14,6 +14,20 @@ export async function getStatus(
   const embed = new EmbedBuilder().setColor(color).setTimestamp();
 
   try {
+    // Check if server is banned first
+    const { SecurityValidator } = await import('./securityValidator');
+    const serverAddress = `${server.ip}:${server.port}`;
+    const banCheck = SecurityValidator.isIPBanned(serverAddress);
+
+    if (banCheck.banned) {
+      embed
+        .setTitle(statusTitle)
+        .setDescription(
+          `**${server.ip}:${server.port}**\n🚫 ${banCheck.reason || 'Server is banned'}`
+        );
+      return embed;
+    }
+
     const info = await sampQuery.getServerInfo(server, guildId, isMonitoring);
     if (!info) {
       embed
