@@ -56,6 +56,17 @@ export async function execute(client: CustomClient): Promise<void> {
         console.log(`Set next daily check to: ${tomorrow.toISOString()}`);
       }
     }
+
+    // Log bot startup to webhook
+    const { WebhookLogger } = await import('../utils/webhookLogger');
+    WebhookLogger.success({
+      title: 'Bot Started',
+      description: `${client.user!.tag} is now online and monitoring servers`,
+      fields: [
+        { name: 'Guilds', value: `${totalGuilds}`, inline: true },
+        { name: 'Servers', value: `${totalServers}`, inline: true },
+      ],
+    });
   } catch (error) {
     console.error('Error loading guild configurations:', error);
   }
@@ -80,12 +91,6 @@ export async function execute(client: CustomClient): Promise<void> {
           '../utils/securityValidator'
         );
         const banStatus = SecurityValidator.isIPBanned(activeServer.ip);
-        if (banStatus.banned) {
-          console.log(
-            `Skipping monitoring for banned IP: ${activeServer.ip} - ${banStatus.reason}`
-          );
-          continue;
-        }
 
         const statusUpdateDue = now >= (interval.next || 0);
 
@@ -93,6 +98,122 @@ export async function execute(client: CustomClient): Promise<void> {
         const voiceUpdateDue = now - lastVoiceUpdate >= 600000;
 
         if (!statusUpdateDue && !voiceUpdateDue) continue;
+
+        // If banned, update channels to show ban status then skip querying
+        if (banStatus.banned) {
+          console.log(
+            `Updating banned server status: ${activeServer.ip} - ${banStatus.reason}`
+          );
+
+          if (statusUpdateDue && interval.statusChannel) {
+            try {
+              const statusChannel = (await client.channels
+                .fetch(interval.statusChannel)
+                .catch(() => null)) as TextChannel | null;
+
+              if (statusChannel) {
+                const color = getRoleColor(guild);
+                const serverEmbed = await getStatus(
+                  activeServer,
+                  color,
+                  guild.id,
+                  true
+                );
+
+                let messageUpdated = false;
+
+                if (interval.statusMessage) {
+                  try {
+                    const existingMsg = await statusChannel.messages.fetch(
+                      interval.statusMessage
+                    );
+                    await existingMsg.edit({ embeds: [serverEmbed] });
+                    if (!isProduction) {
+                      console.log(
+                        `🔄 Updated banned server status in ${guild.name}`
+                      );
+                    }
+                    messageUpdated = true;
+                  } catch {}
+                }
+
+                if (!messageUpdated) {
+                  try {
+                    const newMsg = await statusChannel.send({
+                      embeds: [serverEmbed],
+                    });
+                    interval.statusMessage = newMsg.id;
+                    if (!isProduction) {
+                      console.log(
+                        `Created new banned server status in ${guild.name}`
+                      );
+                    }
+                  } catch (sendError) {
+                    console.error(
+                      `Failed to send banned server status:`,
+                      sendError
+                    );
+                  }
+                }
+              }
+            } catch (error) {
+              console.error(
+                `Failed to update banned server status for ${guild.name}:`,
+                error
+              );
+            }
+
+            interval.next = now + 300000;
+          }
+
+          if (voiceUpdateDue && interval.playerCountChannel) {
+            await client.rateLimitManager.queueChannelUpdate(
+              interval.playerCountChannel,
+              async () => {
+                const playerCountChannel = await client.channels
+                  .fetch(interval.playerCountChannel!)
+                  .catch(() => null);
+
+                if (
+                  playerCountChannel &&
+                  playerCountChannel.type === ChannelType.GuildVoice
+                ) {
+                  const channel = playerCountChannel as VoiceChannel;
+                  const banReason = banStatus.reason || 'Server is banned';
+                  const newName =
+                    banReason.length > 90
+                      ? `🚫 ${banReason.substring(0, 87)}...`
+                      : `🚫 ${banReason}`;
+
+                  if (channel.name !== newName) {
+                    try {
+                      await channel.setName(newName);
+
+                      lastChannelUpdate.set(guild.id, {
+                        time: Date.now(),
+                        count: 0,
+                        online: false,
+                      });
+
+                      if (!isProduction) {
+                        console.log(
+                          `🔊 Updated banned server voice channel in ${guild.name}: ${newName}`
+                        );
+                      }
+                    } catch {}
+                  }
+                }
+              },
+              'high'
+            );
+
+            interval.lastVoiceUpdate = now;
+          }
+
+          await client.intervals.set(guild.id, interval);
+          client.guildConfigs.set(guild.id, guildConfig);
+          continue;
+        }
 
         const serverDataKey = getServerDataKey(guild.id, activeServer.id);
 
@@ -208,9 +329,20 @@ export async function execute(client: CustomClient): Promise<void> {
                 playerCountChannel.type === ChannelType.GuildVoice
               ) {
                 const channel = playerCountChannel as VoiceChannel;
-                const newName = info.isOnline
-                  ? `👥 ${info.playerCount}/${info.maxPlayers}`
-                  : '❌ Server Offline';
+                let newName: string;
+
+                if (info.isOnline) {
+                  newName = `👥 ${info.playerCount}/${info.maxPlayers}`;
+                } else if (info.error) {
+                  // Truncate to 100 chars (Discord limit) if needed
+                  const errorMsg =
+                    info.error.length > 90
+                      ? `🚫 ${info.error.substring(0, 87)}...`
+                      : `🚫 ${info.error}`;
+                  newName = errorMsg;
+                } else {
+                  newName = '❌ Server Offline';
+                }
 
                 if (channel.name !== newName) {
                   try {

@@ -6,8 +6,12 @@ import Keyv from 'keyv';
 import KeyvMysql from '@keyv/mysql';
 import { CustomClient } from './types';
 import { RateLimitManager } from './utils/rateLimitManager';
+import { WebhookLogger } from './utils/webhookLogger';
 
 config();
+
+// Initialize webhook logger
+WebhookLogger.initialize();
 
 const requiredEnvVars = ['TOKEN', 'CLIENT_ID', 'DATABASE_URL'];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -179,6 +183,19 @@ client.on('invalidRequestWarning', data => {
       `⚠️  Approaching invalid request limit! Count: ${data.count}/10000`
     );
     console.error('Check for permission errors or malformed requests');
+
+    WebhookLogger.critical({
+      title: 'Invalid Request Limit Warning',
+      description: 'Bot is approaching Discord invalid request limit',
+      fields: [
+        { name: 'Count', value: `${data.count}/10000`, inline: true },
+        {
+          name: 'Time Remaining',
+          value: `${Math.floor(data.remainingTime / 1000)}s`,
+          inline: true,
+        },
+      ],
+    });
   }
 });
 
@@ -206,10 +223,21 @@ process.on('SIGINT', async () => {
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+
+  WebhookLogger.error({
+    title: 'Unhandled Promise Rejection',
+    description: `\`\`\`${String(reason).substring(0, 1900)}\`\`\``,
+  });
 });
 
 process.on('uncaughtException', error => {
   console.error('Uncaught Exception:', error);
+
+  WebhookLogger.critical({
+    title: 'Uncaught Exception',
+    description: `\`\`\`${error.stack?.substring(0, 1900) || error.message}\`\`\``,
+  });
+
   process.exit(1);
 });
 

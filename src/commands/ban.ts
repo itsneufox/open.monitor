@@ -115,6 +115,21 @@ async function handleBanIP(interaction: ChatInputCommandInteraction) {
           inline: false,
         }
       );
+
+      // Log to webhook
+      const { WebhookLogger } = await import('../utils/webhookLogger');
+      WebhookLogger.ban({
+        title: 'IP Address Banned',
+        fields: [
+          { name: 'IP Address', value: `\`${ipAddress}\``, inline: true },
+          {
+            name: 'Banned By',
+            value: `<@${interaction.user.id}>`,
+            inline: true,
+          },
+          { name: 'Reason', value: reason, inline: false },
+        ],
+      });
     } else {
       embed.addFields({
         name: 'Error',
@@ -161,6 +176,25 @@ async function handleUnbanIP(interaction: ChatInputCommandInteraction) {
           inline: false,
         }
       );
+
+      // Log to webhook
+      const { WebhookLogger } = await import('../utils/webhookLogger');
+      WebhookLogger.success({
+        title: 'IP Address Unbanned',
+        fields: [
+          { name: 'IP Address', value: `\`${ipAddress}\``, inline: true },
+          {
+            name: 'Unbanned By',
+            value: `<@${interaction.user.id}>`,
+            inline: true,
+          },
+          {
+            name: 'Previous Reason',
+            value: result.previousReason || 'Unknown',
+            inline: false,
+          },
+        ],
+      });
     } else {
       embed.addFields({
         name: 'Error',
@@ -236,6 +270,22 @@ async function handleClearBanned(interaction: ChatInputCommandInteraction) {
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });
+
+    // Log to webhook
+    if (count > 0) {
+      const { WebhookLogger } = await import('../utils/webhookLogger');
+      WebhookLogger.warning({
+        title: 'All IP Bans Cleared',
+        description: `${count} IP address${count === 1 ? '' : 'es'} unbanned`,
+        fields: [
+          {
+            name: 'Cleared By',
+            value: `<@${interaction.user.id}>`,
+            inline: true,
+          },
+        ],
+      });
+    }
   } catch {
     await interaction.editReply('Error clearing banned IPs.');
   }
