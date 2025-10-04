@@ -149,9 +149,12 @@ async function handleSetRole(
       await message.react('✅');
       await message.react('❌');
 
-      const filter = (reaction: any, user: any) => {
+      const filter = (
+        reaction: { emoji: { name: string | null } },
+        user: { id: string }
+      ) => {
         return (
-          ['✅', '❌'].includes(reaction.emoji.name) &&
+          ['✅', '❌'].includes(reaction.emoji.name || '') &&
           user.id === interaction.user.id
         );
       };
@@ -168,7 +171,7 @@ async function handleSetRole(
         await interaction.editReply('❌ Role setup cancelled.');
         return;
       }
-    } catch (error) {
+    } catch {
       await interaction.editReply('❌ Role setup timed out. Please try again.');
       return;
     }

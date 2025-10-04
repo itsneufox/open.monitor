@@ -40,7 +40,9 @@ export async function execute(
     return;
   }
 
-  console.log(`[players command] guildId: ${interaction.guildId}, user: ${interaction.user.tag}`);
+  console.log(
+    `[players command] guildId: ${interaction.guildId}, user: ${interaction.user.tag}`
+  );
 
   const servers = (await client.servers.get(interaction.guildId)) || [];
   if (servers.length === 0) {
@@ -99,11 +101,18 @@ export async function execute(
     return;
   }
 
-  console.log(`[players command] Target server: ${targetServer.ip}:${targetServer.port}`);
+  console.log(
+    `[players command] Target server: ${targetServer.ip}:${targetServer.port}`
+  );
 
   try {
-    console.log(`Getting server info for ${targetServer.ip}:${targetServer.port}`);
-    const info = await sampQuery.getServerInfo(targetServer, interaction.guildId);
+    console.log(
+      `Getting server info for ${targetServer.ip}:${targetServer.port}`
+    );
+    const info = await sampQuery.getServerInfo(
+      targetServer,
+      interaction.guildId
+    );
 
     if (!info) {
       const embed = new EmbedBuilder()
@@ -163,12 +172,19 @@ export async function execute(
 
     let players: Array<{ name: string; score: number; ping?: number }> = [];
 
-    console.log(`Server has ${info.players} players, attempting to get player list...`);
+    console.log(
+      `Server has ${info.players} players, attempting to get player list...`
+    );
 
     try {
       console.log('Trying detailed players query...');
-      const detailedPlayers = await sampQuery.getDetailedPlayers(targetServer, interaction.guildId);
-      console.log(`Detailed players response: ${detailedPlayers.length} players`);
+      const detailedPlayers = await sampQuery.getDetailedPlayers(
+        targetServer,
+        interaction.guildId
+      );
+      console.log(
+        `Detailed players response: ${detailedPlayers.length} players`
+      );
 
       if (detailedPlayers.length > 0) {
         players = detailedPlayers.map(player => ({
@@ -179,7 +195,10 @@ export async function execute(
         console.log(`Using detailed player data: ${players.length} players`);
       } else {
         console.log('Detailed query returned 0 players, trying basic query...');
-        const basicPlayers = await sampQuery.getPlayers(targetServer, interaction.guildId);
+        const basicPlayers = await sampQuery.getPlayers(
+          targetServer,
+          interaction.guildId
+        );
         console.log(`Basic players response: ${basicPlayers.length} players`);
 
         players = basicPlayers.map(player => ({
@@ -204,12 +223,15 @@ export async function execute(
               `**Players:** ${info.players}/${info.maxplayers}\n` +
               `**Gamemode:** ${info.gamemode || 'Unknown'}\n` +
               `**Address:** \`${targetServer.ip}:${targetServer.port}\``,
-            inline: false
+            inline: false,
           },
           {
             name: 'Error Details',
-            value: playerError instanceof Error ? playerError.message : 'Unknown error',
-            inline: false
+            value:
+              playerError instanceof Error
+                ? playerError.message
+                : 'Unknown error',
+            inline: false,
           }
         )
         .setFooter({ text: `${targetServer.ip}:${targetServer.port}` })
@@ -220,7 +242,9 @@ export async function execute(
     }
 
     if (players.length === 0) {
-      console.log(`No players returned from queries despite server showing ${info.players} players`);
+      console.log(
+        `No players returned from queries despite server showing ${info.players} players`
+      );
 
       const embed = new EmbedBuilder()
         .setColor(0xff9500)
@@ -235,18 +259,17 @@ export async function execute(
               `**Players:** ${info.players}/${info.maxplayers}\n` +
               `**Gamemode:** ${info.gamemode || 'Unknown'}\n` +
               `**Address:** \`${targetServer.ip}:${targetServer.port}\``,
-            inline: false
+            inline: false,
           },
           {
             name: 'Possible Reasons',
             value:
-              '• Network connectivity issues\n' +
-              '• Temporary server overload',
-            inline: false
+              '• Network connectivity issues\n' + '• Temporary server overload',
+            inline: false,
           }
         )
         .setFooter({
-          text: `${targetServer.ip}:${targetServer.port} • This doesn't affect server monitoring`
+          text: `${targetServer.ip}:${targetServer.port} • This doesn't affect server monitoring`,
         })
         .setTimestamp();
 
@@ -271,9 +294,10 @@ export async function execute(
       playerTable += '-'.repeat(nameColumnWidth + scoreColumnWidth + 1) + '\n';
 
       pageData.forEach(player => {
-        const truncatedName = player.name.length > nameColumnWidth - 1
-          ? player.name.substring(0, nameColumnWidth - 1)
-          : player.name;
+        const truncatedName =
+          player.name.length > nameColumnWidth - 1
+            ? player.name.substring(0, nameColumnWidth - 1)
+            : player.name;
 
         const nameColumn = truncatedName.padEnd(nameColumnWidth);
         const scoreColumn = player.score.toString().padStart(scoreColumnWidth);
@@ -288,9 +312,10 @@ export async function execute(
         .setTitle('Online Players')
         .setDescription(playerTable)
         .setFooter({
-          text: totalPages > 1
-            ? `Page ${page + 1}/${totalPages} • ${players.length} players • ${targetServer.ip}:${targetServer.port}`
-            : `${players.length} players • ${targetServer.ip}:${targetServer.port}`,
+          text:
+            totalPages > 1
+              ? `Page ${page + 1}/${totalPages} • ${players.length} players • ${targetServer.ip}:${targetServer.port}`
+              : `${players.length} players • ${targetServer.ip}:${targetServer.port}`,
         })
         .setTimestamp();
     };
@@ -368,34 +393,35 @@ export async function execute(
       });
 
       collector.on('end', async () => {
-        const disabledButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder()
-            .setCustomId('players_first')
-            .setLabel('« First')
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(true),
-          new ButtonBuilder()
-            .setCustomId('players_prev')
-            .setLabel('‹ Previous')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(true),
-          new ButtonBuilder()
-            .setCustomId('players_next')
-            .setLabel('Next ›')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(true),
-          new ButtonBuilder()
-            .setCustomId('players_last')
-            .setLabel('Last »')
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(true)
-        );
+        const disabledButtons =
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId('players_first')
+              .setLabel('« First')
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(true),
+            new ButtonBuilder()
+              .setCustomId('players_prev')
+              .setLabel('‹ Previous')
+              .setStyle(ButtonStyle.Primary)
+              .setDisabled(true),
+            new ButtonBuilder()
+              .setCustomId('players_next')
+              .setLabel('Next ›')
+              .setStyle(ButtonStyle.Primary)
+              .setDisabled(true),
+            new ButtonBuilder()
+              .setCustomId('players_last')
+              .setLabel('Last »')
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(true)
+          );
 
         try {
           await interaction.editReply({
             components: [disabledButtons],
           });
-        } catch (error) {
+        } catch {
           // Message might have been deleted, ignore error
         }
       });
@@ -412,7 +438,7 @@ export async function execute(
       .addFields({
         name: 'Error Details',
         value: error instanceof Error ? error.message : 'Unknown error',
-        inline: false
+        inline: false,
       })
       .setFooter({ text: `${targetServer.ip}:${targetServer.port}` })
       .setTimestamp();

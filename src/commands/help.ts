@@ -503,7 +503,7 @@ export async function execute(
         await interaction.editReply({
           components: [disabledButtons],
         });
-      } catch (error) {
+      } catch {
         // Message might have been deleted, ignore error
       }
     });

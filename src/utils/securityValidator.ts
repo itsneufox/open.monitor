@@ -2,12 +2,15 @@ import { ServerConfig } from '../types';
 
 interface IPQueryData {
   lastHour: number[];
-  guilds: Map<string, {
-    lastQuery: number;
-    queryCount: number;
-    lastMonitoringQuery?: number;
-    lastUserQuery?: number;
-  }>;
+  guilds: Map<
+    string,
+    {
+      lastQuery: number;
+      queryCount: number;
+      lastMonitoringQuery?: number;
+      lastUserQuery?: number;
+    }
+  >;
   totalQueries: number;
   failures: number;
   lastFailure: number;
@@ -20,6 +23,17 @@ interface IPQueryData {
 class SecurityValidator {
   private static ipQueryLimits = new Map<string, IPQueryData>();
 
+  private static readonly HARDCODED_BANS = new Map<string, string>([
+    ['s1.gta-mp.cz:7777', 'Permanently banned for severe ToS violations'],
+    ['s2.gta-mp.cz:7777', 'Permanently banned for severe ToS violations'],
+    ['s3.gta-mp.cz:7777', 'Permanently banned for severe ToS violations'],
+    ['s4.gta-mp.cz:7777', 'Permanently banned for severe ToS violations'],
+    ['178.32.234.16:7777', 'Permanently banned for severe ToS violations'],
+    ['178.63.13.150:7777', 'Permanently banned for severe ToS violations'],
+    ['178.32.234.17:7777', 'Permanently banned for severe ToS violations'],
+    ['178.32.234.18:7777', 'Permanently banned for severe ToS violations'],
+  ]);
+
   private static readonly LIMITS = {
     MAX_QUERIES_PER_HOUR: 200,
     MAX_GUILDS_PER_IP: 15,
@@ -31,7 +45,7 @@ class SecurityValidator {
     USER_BURST_WINDOW: 10000,
   };
 
-  static validateServerIP(ip: string): boolean {
+  static validateServerIP(_ip: string): boolean {
     return true;
   }
 
@@ -40,11 +54,21 @@ class SecurityValidator {
     guildId: string,
     isMonitoringCycle: boolean = false
   ): boolean {
+    const hardcodedBanReason = this.checkHardcodedBan(targetIP);
+    if (hardcodedBanReason) {
+      console.warn(
+        `Blocked query to hardcoded banned server: ${targetIP} (${hardcodedBanReason})`
+      );
+      return false;
+    }
+
     const data = this.getOrCreateIPData(targetIP);
     const now = Date.now();
 
     if (data.banned) {
-      console.warn(`Blocked query to banned IP: ${targetIP} (${data.banReason})`);
+      console.warn(
+        `Blocked query to banned IP: ${targetIP} (${data.banReason})`
+      );
       return false;
     }
 
@@ -55,38 +79,54 @@ class SecurityValidator {
       lastQuery: 0,
       queryCount: 0,
       lastMonitoringQuery: 0,
-      lastUserQuery: 0
+      lastUserQuery: 0,
     };
 
     if (data.lastHour.length >= this.LIMITS.MAX_QUERIES_PER_HOUR) {
-      this.flagSuspiciousActivity(targetIP, `Hourly limit exceeded: ${data.lastHour.length}`);
+      this.flagSuspiciousActivity(
+        targetIP,
+        `Hourly limit exceeded: ${data.lastHour.length}`
+      );
       return false;
     }
 
-    if (data.guilds.size >= this.LIMITS.MAX_GUILDS_PER_IP && !data.guilds.has(guildId)) {
-      this.flagSuspiciousActivity(targetIP, `Too many guilds: ${data.guilds.size}`);
+    if (
+      data.guilds.size >= this.LIMITS.MAX_GUILDS_PER_IP &&
+      !data.guilds.has(guildId)
+    ) {
+      this.flagSuspiciousActivity(
+        targetIP,
+        `Too many guilds: ${data.guilds.size}`
+      );
       return false;
     }
 
     if (isMonitoringCycle) {
       const lastMonitoring = guildData.lastMonitoringQuery || 0;
       if (now - lastMonitoring < this.LIMITS.MIN_MONITORING_INTERVAL) {
-        console.warn(`Monitoring query too frequent for ${targetIP}: ${now - lastMonitoring}ms < ${this.LIMITS.MIN_MONITORING_INTERVAL}ms`);
+        console.warn(
+          `Monitoring query too frequent for ${targetIP}: ${now - lastMonitoring}ms < ${this.LIMITS.MIN_MONITORING_INTERVAL}ms`
+        );
         return false;
       }
     } else {
       const lastUser = guildData.lastUserQuery || 0;
       const timeSinceLastUser = now - lastUser;
 
-      const recentUserQueries = data.lastHour.filter(time =>
-        time > now - this.LIMITS.USER_BURST_WINDOW &&
-        time > (guildData.lastMonitoringQuery || 0)
+      const recentUserQueries = data.lastHour.filter(
+        time =>
+          time > now - this.LIMITS.USER_BURST_WINDOW &&
+          time > (guildData.lastMonitoringQuery || 0)
       ).length;
 
       if (recentUserQueries < this.LIMITS.USER_BURST_ALLOWANCE) {
-        console.log(`Allowing user query ${recentUserQueries + 1}/${this.LIMITS.USER_BURST_ALLOWANCE} for ${targetIP}`);
+        console.log(
+          `Allowing user query ${recentUserQueries + 1}/${this.LIMITS.USER_BURST_ALLOWANCE} for ${targetIP}`
+        );
       } else if (timeSinceLastUser < this.LIMITS.MIN_USER_INTERVAL) {
-        console.warn(`User query too frequent for ${targetIP} (guild: ${guildId}): lastQuery=${timeSinceLastUser}ms ago (cooldown: ${this.LIMITS.MIN_USER_INTERVAL}ms, burst: ${recentUserQueries}/${this.LIMITS.USER_BURST_ALLOWANCE})`);
+        console.warn(
+          `User query too frequent for ${targetIP} (guild: ${guildId}): lastQuery=${timeSinceLastUser}ms ago (cooldown: ${this.LIMITS.MIN_USER_INTERVAL}ms, burst: ${recentUserQueries}/${this.LIMITS.USER_BURST_ALLOWANCE})`
+        );
         return false;
       }
     }
@@ -137,10 +177,15 @@ class SecurityValidator {
     const data = this.getOrCreateIPData(ip);
     data.suspiciousActivity++;
 
-    console.warn(`Suspicious activity from ${ip}: ${reason} (count: ${data.suspiciousActivity})`);
+    console.warn(
+      `Suspicious activity from ${ip}: ${reason} (count: ${data.suspiciousActivity})`
+    );
 
     if (data.suspiciousActivity >= this.LIMITS.SUSPICIOUS_THRESHOLD) {
-      this.autoBanIP(ip, `Automatic ban: ${data.suspiciousActivity} suspicious activities`);
+      this.autoBanIP(
+        ip,
+        `Automatic ban: ${data.suspiciousActivity} suspicious activities`
+      );
     }
   }
 
@@ -200,13 +245,20 @@ class SecurityValidator {
     };
   }
 
-  static recordQueryFailure(targetIP: string, error: Error, guildId?: string): void {
+  static recordQueryFailure(
+    targetIP: string,
+    error: Error,
+    guildId?: string
+  ): void {
     const data = this.getOrCreateIPData(targetIP);
     data.failures++;
     data.lastFailure = Date.now();
 
     if (data.failures >= this.LIMITS.MAX_FAILURES_BEFORE_BAN) {
-      this.autoBanIP(targetIP, `Automatic ban: ${data.failures} consecutive failures`);
+      this.autoBanIP(
+        targetIP,
+        `Automatic ban: ${data.failures} consecutive failures`
+      );
     }
 
     if (guildId) {
@@ -223,15 +275,18 @@ class SecurityValidator {
     try {
       if (guildId !== '1309527094476275782') return;
 
-      const { Client } = require('discord.js');
-      const client = require('../index').default;
+      const clientModule = await import('../index');
+      const client = clientModule.default as {
+        channels?: { fetch: (id: string) => Promise<unknown> };
+      };
 
       if (!client || !client.channels) return;
 
       const channelId = '1405066715687026718';
       const channel = await client.channels.fetch(channelId).catch(() => null);
 
-      if (!channel || !('send' in channel)) return;
+      if (!channel || typeof channel !== 'object' || !('send' in channel))
+        return;
 
       const errorType = this.getErrorType(error);
 
@@ -266,24 +321,29 @@ class SecurityValidator {
       if (error.message.includes('ENOTFOUND')) {
         embed.fields.push({
           name: 'Recommendation',
-          value: 'Check if the server IP/domain is correct. This might be a typo in the server configuration.',
+          value:
+            'Check if the server IP/domain is correct. This might be a typo in the server configuration.',
           inline: false,
         });
       } else if (error.message.includes('ECONNREFUSED')) {
         embed.fields.push({
           name: 'Recommendation',
-          value: 'Server is refusing connections. Check if the port is correct and the server is running.',
+          value:
+            'Server is refusing connections. Check if the port is correct and the server is running.',
           inline: false,
         });
       } else if (error.message.includes('timeout')) {
         embed.fields.push({
           name: 'Recommendation',
-          value: 'Server might be offline, slow to respond, or behind a firewall blocking queries.',
+          value:
+            'Server might be offline, slow to respond, or behind a firewall blocking queries.',
           inline: false,
         });
       }
 
-      await channel.send({ embeds: [embed] });
+      await (channel as { send: (data: unknown) => Promise<unknown> }).send({
+        embeds: [embed],
+      });
     } catch (logError) {
       console.error('Failed to log error to guild channel:', logError);
     }
@@ -305,7 +365,21 @@ class SecurityValidator {
     return 'Unknown Error';
   }
 
+  private static checkHardcodedBan(targetIP: string): string | null {
+    for (const [bannedServer, reason] of this.HARDCODED_BANS.entries()) {
+      if (targetIP.includes(bannedServer) || bannedServer.includes(targetIP)) {
+        return reason;
+      }
+    }
+    return null;
+  }
+
   static isIPBanned(targetIP: string): { banned: boolean; reason?: string } {
+    const hardcodedBanReason = this.checkHardcodedBan(targetIP);
+    if (hardcodedBanReason) {
+      return { banned: true, reason: hardcodedBanReason };
+    }
+
     const data = this.ipQueryLimits.get(targetIP);
     if (!data || !data.banned) {
       return { banned: false };
@@ -318,7 +392,10 @@ class SecurityValidator {
     return result;
   }
 
-  static banIP(targetIP: string, reason: string): { success: boolean; error?: string } {
+  static banIP(
+    targetIP: string,
+    reason: string
+  ): { success: boolean; error?: string } {
     let data = this.ipQueryLimits.get(targetIP);
 
     if (!data) {
@@ -347,7 +424,11 @@ class SecurityValidator {
     return { success: true };
   }
 
-  static unbanIP(targetIP: string): { success: boolean; error?: string; previousReason?: string } {
+  static unbanIP(targetIP: string): {
+    success: boolean;
+    error?: string;
+    previousReason?: string;
+  } {
     const data = this.ipQueryLimits.get(targetIP);
 
     if (!data || !data.banned) {
@@ -363,15 +444,38 @@ class SecurityValidator {
     this.ipQueryLimits.set(targetIP, data);
     console.log(`Manually unbanned IP: ${targetIP}`);
 
-    const result: { success: boolean; error?: string; previousReason?: string } = { success: true };
+    const result: {
+      success: boolean;
+      error?: string;
+      previousReason?: string;
+    } = { success: true };
     if (previousReason) {
       result.previousReason = previousReason;
     }
     return result;
   }
 
-  static getBannedIPs(): Array<{ ip: string; reason: string; failures: number; bannedAt: number }> {
-    const banned: Array<{ ip: string; reason: string; failures: number; bannedAt: number }> = [];
+  static getBannedIPs(): Array<{
+    ip: string;
+    reason: string;
+    failures: number;
+    bannedAt: number;
+  }> {
+    const banned: Array<{
+      ip: string;
+      reason: string;
+      failures: number;
+      bannedAt: number;
+    }> = [];
+
+    for (const [ip, reason] of this.HARDCODED_BANS.entries()) {
+      banned.push({
+        ip,
+        reason,
+        failures: 0,
+        bannedAt: 0,
+      });
+    }
 
     for (const [ip, data] of this.ipQueryLimits.entries()) {
       if (data.banned) {
@@ -390,7 +494,7 @@ class SecurityValidator {
   static clearAllBans(): number {
     let count = 0;
 
-    for (const [ip, data] of this.ipQueryLimits.entries()) {
+    for (const [, data] of this.ipQueryLimits.entries()) {
       if (data.banned) {
         data.banned = false;
         data.failures = 0;
@@ -409,8 +513,46 @@ class SecurityValidator {
     console.log('Rate limits cleared');
   }
 
-  static getRateLimitStats(): Record<string, any> {
-    const stats: Record<string, any> = {};
+  static getRateLimitStats(): Record<
+    string,
+    {
+      queriesInLastHour: number;
+      totalGuilds: number;
+      totalQueries: number;
+      failures: number;
+      banned: boolean;
+      banReason?: string | undefined;
+      bannedAt?: number | undefined;
+      suspiciousActivity: number;
+      guilds: Array<{
+        guildId: string;
+        lastQuery: string;
+        queryCount: number;
+        lastMonitoring: string;
+        lastUser: string;
+      }>;
+    }
+  > {
+    const stats: Record<
+      string,
+      {
+        queriesInLastHour: number;
+        totalGuilds: number;
+        totalQueries: number;
+        failures: number;
+        banned: boolean;
+        banReason?: string | undefined;
+        bannedAt?: number | undefined;
+        suspiciousActivity: number;
+        guilds: Array<{
+          guildId: string;
+          lastQuery: string;
+          queryCount: number;
+          lastMonitoring: string;
+          lastUser: string;
+        }>;
+      }
+    > = {};
     for (const [ip, data] of this.ipQueryLimits.entries()) {
       stats[ip] = {
         queriesInLastHour: data.lastHour.length,
@@ -426,8 +568,12 @@ class SecurityValidator {
             guildId,
             lastQuery: Date.now() - guildData.lastQuery + 'ms ago',
             queryCount: guildData.queryCount,
-            lastMonitoring: guildData.lastMonitoringQuery ? Date.now() - guildData.lastMonitoringQuery + 'ms ago' : 'never',
-            lastUser: guildData.lastUserQuery ? Date.now() - guildData.lastUserQuery + 'ms ago' : 'never',
+            lastMonitoring: guildData.lastMonitoringQuery
+              ? Date.now() - guildData.lastMonitoringQuery + 'ms ago'
+              : 'never',
+            lastUser: guildData.lastUserQuery
+              ? Date.now() - guildData.lastUserQuery + 'ms ago'
+              : 'never',
           })
         ),
       };
@@ -441,7 +587,11 @@ class SecurityValidator {
     for (const [ip, data] of this.ipQueryLimits.entries()) {
       this.cleanOldGuildData(data, now);
 
-      if (data.lastHour.length === 0 && data.guilds.size === 0 && !data.banned) {
+      if (
+        data.lastHour.length === 0 &&
+        data.guilds.size === 0 &&
+        !data.banned
+      ) {
         this.ipQueryLimits.delete(ip);
       }
     }
@@ -487,10 +637,15 @@ class SecurityValidator {
     let recentNewIPs = 0;
 
     for (const data of this.ipQueryLimits.values()) {
-      const recentQueriesFromIP = data.lastHour.filter(time => time > now - recentWindow);
+      const recentQueriesFromIP = data.lastHour.filter(
+        time => time > now - recentWindow
+      );
       recentQueries += recentQueriesFromIP.length;
 
-      if (data.lastHour.length > 0 && Math.min(...data.lastHour) > now - recentWindow) {
+      if (
+        data.lastHour.length > 0 &&
+        Math.min(...data.lastHour) > now - recentWindow
+      ) {
         recentNewIPs++;
       }
     }

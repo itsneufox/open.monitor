@@ -62,7 +62,10 @@ export interface GuildConfig {
 }
 
 export interface CustomClient extends Client {
-  commands: Collection<string, any>;
+  commands: Collection<
+    string,
+    { data: { name: string }; execute: (...args: unknown[]) => Promise<void> }
+  >;
   servers: Keyv<ServerConfig[]>;
   intervals: Keyv<IntervalConfig>;
   maxPlayers: Keyv<ChartData>;

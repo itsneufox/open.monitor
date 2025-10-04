@@ -19,7 +19,9 @@ export async function getPlayerCount(
   ignoreCache: boolean = false
 ): Promise<PlayerCountResult> {
   try {
-    console.log(`[getPlayerCount] guildId: ${guildId}, server: ${server.ip}:${server.port}, isMonitoring: ${isMonitoring}`);
+    console.log(
+      `[getPlayerCount] guildId: ${guildId}, server: ${server.ip}:${server.port}, isMonitoring: ${isMonitoring}`
+    );
 
     const cacheKey = getServerDataKey(guildId, server.id);
 
@@ -34,15 +36,32 @@ export async function getPlayerCount(
             maxPlayers: info.maxPlayers || 100,
             name: info.name || server.name,
             isOnline: true,
-            isCached: true
+            isCached: true,
           };
         }
-      } catch (error) {
+      } catch {
         console.log('Cache unavailable, querying server directly');
       }
     }
 
-    const { SecurityValidator } = require('./securityValidator');
+    const { SecurityValidator } = await import('./securityValidator');
+
+    // Check if server is hardcoded banned
+    const serverAddress = `${server.ip}:${server.port}`;
+    const banCheck = SecurityValidator.isIPBanned(serverAddress);
+    if (banCheck.banned) {
+      console.warn(
+        `Blocked query to banned server: ${serverAddress} (${banCheck.reason})`
+      );
+      return {
+        playerCount: 0,
+        maxPlayers: 0,
+        name: 'Server Banned',
+        isOnline: false,
+        isCached: false,
+        error: banCheck.reason || 'Server is banned',
+      };
+    }
 
     if (!SecurityValidator.canQueryIP(server.ip, guildId, isMonitoring)) {
       console.warn(`Rate limited for ${server.ip}, trying cached data`);
@@ -58,10 +77,10 @@ export async function getPlayerCount(
             name: info.name || server.name,
             isOnline: true,
             isCached: true,
-            error: 'Rate limited - showing cached data'
+            error: 'Rate limited - showing cached data',
           };
         }
-      } catch (cacheError) {
+      } catch {
         console.log('No cached data available during rate limit');
       }
 
@@ -71,7 +90,7 @@ export async function getPlayerCount(
         name: server.name,
         isOnline: false,
         isCached: false,
-        error: 'Rate limited - no cached data available'
+        error: 'Rate limited - no cached data available',
       };
     }
 
@@ -83,7 +102,7 @@ export async function getPlayerCount(
         maxPlayers: 100,
         name: 'Server Offline',
         isOnline: false,
-        isCached: false
+        isCached: false,
       };
     }
 
@@ -92,7 +111,7 @@ export async function getPlayerCount(
       maxPlayers: info.maxplayers,
       name: info.hostname,
       isOnline: true,
-      isCached: false
+      isCached: false,
     };
 
     try {
@@ -101,22 +120,25 @@ export async function getPlayerCount(
 
       const cacheTime = isMonitoring ? 600 : 60;
 
-      await valkey.set(cacheKey, JSON.stringify({
-        players: result.playerCount,
-        maxPlayers: result.maxPlayers,
-        name: result.name
-      }), {
-        expiry: {
-          type: TimeUnit.Seconds,
-          count: cacheTime
-        },
-      });
-    } catch (error) {
+      await valkey.set(
+        cacheKey,
+        JSON.stringify({
+          players: result.playerCount,
+          maxPlayers: result.maxPlayers,
+          name: result.name,
+        }),
+        {
+          expiry: {
+            type: TimeUnit.Seconds,
+            count: cacheTime,
+          },
+        }
+      );
+    } catch {
       console.log('Failed to cache player data');
     }
 
     return result;
-
   } catch (error) {
     console.error('Error getting player count:', error);
 
@@ -131,10 +153,10 @@ export async function getPlayerCount(
           name: info.name || server.name,
           isOnline: true,
           isCached: true,
-          error: 'Error occurred - showing cached data'
+          error: 'Error occurred - showing cached data',
         };
       }
-    } catch (cacheError) {
+    } catch {
       console.log('No cached data available during error');
     }
 
@@ -144,7 +166,7 @@ export async function getPlayerCount(
       name: 'Server Error',
       isOnline: false,
       isCached: false,
-      error: 'Server offline or unreachable'
+      error: 'Server offline or unreachable',
     };
   }
 }

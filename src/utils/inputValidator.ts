@@ -206,7 +206,13 @@ class InputValidator {
   // Guild config validation
   static validateGuildConfig(
     guildId: string,
-    config: any
+    config: {
+      statusChannel?: string;
+      chartChannel?: string;
+      playerCountChannel?: string;
+      serverIpChannel?: string;
+      managementRoleId?: string;
+    }
   ): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
     const validateId = (id: string, type: string) => {
@@ -216,13 +222,16 @@ class InputValidator {
 
     validateId(guildId, 'Guild ID');
 
-    [
+    const idFields: Array<keyof typeof config> = [
       'statusChannel',
       'chartChannel',
       'playerCountChannel',
       'serverIpChannel',
-    ].forEach(type => {
-      if (config[type]) validateId(config[type], type);
+    ];
+
+    idFields.forEach(field => {
+      const value = config[field];
+      if (value) validateId(value, field);
     });
 
     if (config.managementRoleId) {

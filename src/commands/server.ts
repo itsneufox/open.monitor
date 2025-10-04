@@ -181,10 +181,10 @@ async function handleAdd(
   if (!SecurityValidator.validateServerIP(ip)) {
     await interaction.editReply(
       '❌ Invalid or blocked IP address. Please use a valid public IPv4 address.\n\n' +
-      '**Blocked ranges:**\n' +
-      '• Private networks (10.x.x.x, 192.168.x.x, 172.16-31.x.x)\n' +
-      '• Loopback (127.x.x.x) - only allowed in development\n' +
-      '• Invalid ranges (0.x.x.x, 169.254.x.x, 224.x.x.x, 255.x.x.x)'
+        '**Blocked ranges:**\n' +
+        '• Private networks (10.x.x.x, 192.168.x.x, 172.16-31.x.x)\n' +
+        '• Loopback (127.x.x.x) - only allowed in development\n' +
+        '• Invalid ranges (0.x.x.x, 169.254.x.x, 224.x.x.x, 255.x.x.x)'
     );
     return;
   }
@@ -226,14 +226,26 @@ async function handleAdd(
     return;
   }
 
+  // Check if server is banned
+  const serverAddress = `${ip}:${port}`;
+  const banCheck = SecurityValidator.isIPBanned(serverAddress);
+  if (banCheck.banned) {
+    await interaction.editReply(
+      `❌ This server cannot be monitored.\n\n` +
+        `**Reason:** ${banCheck.reason || 'Server is banned'}\n\n` +
+        `This server has been permanently blocked from being monitored by this bot.`
+    );
+    return;
+  }
+
   // Check rate limiting for this IP
   if (!SecurityValidator.canQueryIP(ip, interaction.guildId!)) {
     await interaction.editReply(
       '❌ Rate limit exceeded for this IP address. Please try again later.\n\n' +
-      '**Rate limits:**\n' +
-      '• Maximum 12 queries per hour per IP\n' +
-      '• Maximum 3 different Discord servers per IP\n' +
-      '• Minimum 30 seconds between queries'
+        '**Rate limits:**\n' +
+        '• Maximum 12 queries per hour per IP\n' +
+        '• Maximum 3 different Discord servers per IP\n' +
+        '• Minimum 30 seconds between queries'
     );
     return;
   }
@@ -336,10 +348,15 @@ async function handleAdd(
             const channelNameValidation = InputValidator.validateChannelName(
               `IP: ${ip}:${port}`
             );
-            if (channelNameValidation.valid) {
-              await (serverIpChannel as any).setName(
-                channelNameValidation.sanitized
-              );
+            if (
+              channelNameValidation.valid &&
+              typeof channelNameValidation.sanitized === 'string'
+            ) {
+              await (
+                serverIpChannel as {
+                  setName: (name: string) => Promise<unknown>;
+                }
+              ).setName(channelNameValidation.sanitized);
             }
           }
         } catch (error) {
@@ -608,9 +625,9 @@ async function handleActivate(
         .fetch(intervalConfig.serverIpChannel)
         .catch(() => null);
       if (serverIpChannel && 'setName' in serverIpChannel) {
-        await (serverIpChannel as any).setName(
-          `IP: ${server.ip}:${server.port}`
-        );
+        await (
+          serverIpChannel as { setName: (name: string) => Promise<unknown> }
+        ).setName(`IP: ${server.ip}:${server.port}`);
       }
     } catch (error) {
       console.error('Failed to update IP channel name:', error);
@@ -730,9 +747,11 @@ async function handleRemove(
                 .fetch(intervalConfig.serverIpChannel)
                 .catch(() => null);
               if (serverIpChannel && 'setName' in serverIpChannel) {
-                await (serverIpChannel as any).setName(
-                  `IP: ${newActiveServer.ip}:${newActiveServer.port}`
-                );
+                await (
+                  serverIpChannel as {
+                    setName: (name: string) => Promise<unknown>;
+                  }
+                ).setName(`IP: ${newActiveServer.ip}:${newActiveServer.port}`);
               }
             } catch (error) {
               console.error('Failed to update IP channel name:', error);
@@ -897,7 +916,7 @@ async function handleStatus(
     if (!rateLimitCheck.allowed) {
       await interaction.editReply(
         `❌ Fresh status requests are limited to prevent rate limits. Please wait ${Math.ceil((rateLimitCheck.remainingTime || 0) / 1000)} seconds.\n\n` +
-        `💡 **Tip:** Regular status checks (without \`fresh: true\`) are unlimited and show recent data.`
+          `💡 **Tip:** Regular status checks (without \`fresh: true\`) are unlimited and show recent data.`
       );
       return;
     }

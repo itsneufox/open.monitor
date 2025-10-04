@@ -86,12 +86,13 @@ if (!fs.existsSync(commandsPath)) {
 }
 
 const commandFiles = getScriptFiles(commandsPath);
-const commands: any[] = [];
+const commands: Array<Record<string, unknown>> = [];
 
 console.log('Loading commands...');
 for (const file of commandFiles) {
   try {
     const filePath = path.join(commandsPath, file);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const command = require(filePath);
 
     if ('data' in command && 'execute' in command) {
@@ -121,6 +122,7 @@ console.log('Loading events...');
 for (const file of eventFiles) {
   try {
     const filePath = path.join(eventsPath, file);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const event = require(filePath);
 
     if ('name' in event && 'execute' in event) {
@@ -149,7 +151,7 @@ const rest = new REST().setToken(process.env.TOKEN!);
     const data = (await rest.put(
       Routes.applicationCommands(process.env.CLIENT_ID!),
       { body: commands }
-    )) as any[];
+    )) as Array<Record<string, unknown>>;
     console.log(
       `Successfully reloaded ${data.length} application (/) commands.`
     );
@@ -182,6 +184,7 @@ client.on('invalidRequestWarning', data => {
 
 setInterval(() => {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { SecurityValidator } = require('./utils/securityValidator');
     SecurityValidator.cleanupOldEntries();
   } catch (error) {
@@ -210,17 +213,20 @@ process.on('uncaughtException', error => {
   process.exit(1);
 });
 
-client.login(process.env.TOKEN).then(async () => {
-  try {
-    const { valkeyReady } = await import('./utils/valkey');
-    await valkeyReady;
-    console.log('All systems ready!');
-  } catch (error) {
-    console.warn('Valkey not available, continuing without cache');
-  }
-}).catch(error => {
-  console.error('Failed to login to Discord:', error);
-  process.exit(1);
-});
+client
+  .login(process.env.TOKEN)
+  .then(async () => {
+    try {
+      const { valkeyReady } = await import('./utils/valkey');
+      await valkeyReady;
+      console.log('All systems ready!');
+    } catch {
+      console.warn('Valkey not available, continuing without cache');
+    }
+  })
+  .catch((error: Error) => {
+    console.error('Failed to login to Discord:', error);
+    process.exit(1);
+  });
 
 export default commands;

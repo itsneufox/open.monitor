@@ -203,7 +203,7 @@ export async function execute(
         .map(([channelId, stats]) => {
           const channel = client.channels.cache.get(channelId);
           const channelName = channel ? `<#${channelId}>` : `Unknown Channel`;
-          return `${channelName} (\`${channelId}\`): ${(stats as any).size} queued`;
+          return `${channelName} (\`${channelId}\`): ${(stats as { size: number }).size} queued`;
         })
         .join('\n');
 
@@ -222,7 +222,7 @@ export async function execute(
 
     // Add rate limit statistics
     try {
-      const { SecurityValidator } = require('../utils/securityValidator');
+      const { SecurityValidator } = await import('../utils/securityValidator');
       const rateLimitStats = SecurityValidator.getRateLimitStats();
       const activeIPs = Object.keys(rateLimitStats).length;
 
@@ -230,7 +230,10 @@ export async function execute(
         const summary = Object.entries(rateLimitStats)
           .slice(0, 5) // Show only first 5 IPs to avoid embed limits
           .map(
-            ([ip, stats]: [string, any]) =>
+            ([ip, stats]: [
+              string,
+              { queriesInLastHour: number; totalGuilds: number },
+            ]) =>
               `**${ip}**: ${stats.queriesInLastHour} queries/hour, ${stats.totalGuilds} guilds`
           )
           .join('\n');
@@ -247,7 +250,7 @@ export async function execute(
           inline: false,
         });
       }
-    } catch (error) {
+    } catch {
       embed.addFields({
         name: '🛡️ Rate Limiting',
         value: 'Error fetching rate limit stats',
@@ -302,7 +305,7 @@ export async function execute(
       let totalChartEntries = 0;
       let totalUptimeEntries = 0;
 
-      for (const [guildId, config] of client.guildConfigs.entries()) {
+      for (const [, config] of client.guildConfigs.entries()) {
         for (const server of config.servers) {
           try {
             const chartData = await client.maxPlayers.get(server.id);
@@ -310,7 +313,7 @@ export async function execute(
 
             if (chartData?.days) totalChartEntries += chartData.days.length;
             if (uptimeData) totalUptimeEntries++;
-          } catch (error) {
+          } catch {
             // Skip errors for individual servers
           }
         }
@@ -324,7 +327,7 @@ export async function execute(
           `**Database URL:** \`${process.env.DATABASE_URL?.split('@')[1] || 'Not configured'}\``,
         inline: false,
       });
-    } catch (error) {
+    } catch {
       embed.addFields({
         name: '💾 Database Statistics',
         value: 'Error fetching database statistics',
@@ -332,8 +335,9 @@ export async function execute(
       });
     }
 
+    const discordjs = await import('discord.js');
     const footerOptions: { text: string; iconURL?: string } = {
-      text: `Owner Debug Panel • Process ID: ${process.pid} • Discord.js v${require('discord.js').version}`,
+      text: `Owner Debug Panel • Process ID: ${process.pid} • Discord.js v${discordjs.version}`,
     };
 
     const botAvatarURL = client.user?.displayAvatarURL();

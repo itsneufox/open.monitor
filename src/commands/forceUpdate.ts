@@ -6,7 +6,7 @@ import {
   ChannelType,
   VoiceChannel,
 } from 'discord.js';
-import { CustomClient } from '../types';
+import { CustomClient, GuildConfig } from '../types';
 import { getPlayerCount, getStatus, getRoleColor } from '../utils';
 import { getServerDataKey } from '../types';
 import { InputValidator } from '../utils/inputValidator';
@@ -147,10 +147,7 @@ async function handleStatusUpdate(
   const guildId = targetGuildId || interaction.guildId!;
   const guildConfig = client.guildConfigs.get(guildId);
 
-  if (
-    !guildConfig?.interval?.enabled ||
-    !guildConfig.interval.activeServerId
-  ) {
+  if (!guildConfig?.interval?.enabled || !guildConfig.interval.activeServerId) {
     await interaction.editReply(
       `❌ No active monitoring configured for guild ${guildId}.`
     );
@@ -216,10 +213,15 @@ async function handleVoiceUpdate(
       if (
         guildConfig.interval?.enabled &&
         guildConfig.interval.activeServerId &&
-        (guildConfig.interval.playerCountChannel || guildConfig.interval.serverIpChannel)
+        (guildConfig.interval.playerCountChannel ||
+          guildConfig.interval.serverIpChannel)
       ) {
         try {
-          const channelsUpdated = await updateGuildVoiceChannels(client, guildId, guildConfig);
+          const channelsUpdated = await updateGuildVoiceChannels(
+            client,
+            guildId,
+            guildConfig
+          );
           updatedChannels += channelsUpdated;
           updatedGuilds++;
         } catch (error) {
@@ -260,10 +262,7 @@ async function handleVoiceUpdate(
   const guildId = targetGuildId || interaction.guildId!;
   const guildConfig = client.guildConfigs.get(guildId);
 
-  if (
-    !guildConfig?.interval?.enabled ||
-    !guildConfig.interval.activeServerId
-  ) {
+  if (!guildConfig?.interval?.enabled || !guildConfig.interval.activeServerId) {
     await interaction.editReply(
       `❌ No active monitoring configured for guild ${guildId}.`
     );
@@ -281,7 +280,11 @@ async function handleVoiceUpdate(
     return;
   }
 
-  const channelsUpdated = await updateGuildVoiceChannels(client, guildId, guildConfig);
+  const channelsUpdated = await updateGuildVoiceChannels(
+    client,
+    guildId,
+    guildConfig
+  );
 
   const guild = client.guilds.cache.get(guildId);
   const embed = new EmbedBuilder()
@@ -317,13 +320,17 @@ async function handleVoiceUpdate(
 async function updateGuildVoiceChannels(
   client: CustomClient,
   guildId: string,
-  guildConfig: any
+  guildConfig: GuildConfig
 ): Promise<number> {
   const { interval, servers } = guildConfig;
   let channelsUpdated = 0;
 
+  if (!interval) {
+    throw new Error('Interval configuration not found');
+  }
+
   const activeServer = servers.find(
-    (s: any) => s.id === interval.activeServerId
+    (s: { id: string }) => s.id === interval.activeServerId
   );
   if (!activeServer) {
     throw new Error('Active server not found');
@@ -367,16 +374,16 @@ async function updateGuildVoiceChannels(
         .fetch(interval.serverIpChannel)
         .catch(() => null);
 
-      if (
-        serverIpChannel &&
-        serverIpChannel.type === ChannelType.GuildVoice
-      ) {
+      if (serverIpChannel && serverIpChannel.type === ChannelType.GuildVoice) {
         const channel = serverIpChannel as VoiceChannel;
         const channelNameValidation = InputValidator.validateChannelName(
           `IP: ${activeServer.ip}:${activeServer.port}`
         );
 
-        if (channelNameValidation.valid && typeof channelNameValidation.sanitized === 'string') {
+        if (
+          channelNameValidation.valid &&
+          typeof channelNameValidation.sanitized === 'string'
+        ) {
           const newName = channelNameValidation.sanitized;
           if (channel.name !== newName) {
             await channel.setName(newName);
@@ -395,12 +402,16 @@ async function updateGuildVoiceChannels(
 async function performGuildUpdate(
   client: CustomClient,
   guildId: string,
-  guildConfig: any
+  guildConfig: GuildConfig
 ): Promise<void> {
   const { interval, servers } = guildConfig;
 
+  if (!interval) {
+    throw new Error('Interval configuration not found');
+  }
+
   const activeServer = servers.find(
-    (s: any) => s.id === interval.activeServerId
+    (s: { id: string }) => s.id === interval.activeServerId
   );
   if (!activeServer) {
     throw new Error('Active server not found');
@@ -416,7 +427,9 @@ async function performGuildUpdate(
     onlineStats = { uptime: 0, downtime: 0 };
   }
 
-  let chartData = await client.maxPlayers.get(getServerDataKey(guildId, activeServer.id));
+  let chartData = await client.maxPlayers.get(
+    getServerDataKey(guildId, activeServer.id)
+  );
   if (!chartData) {
     chartData = {
       maxPlayersToday: 0,
@@ -434,7 +447,10 @@ async function performGuildUpdate(
   chartData.name = info.name;
   chartData.maxPlayers = info.maxPlayers;
 
-  await client.maxPlayers.set(getServerDataKey(guildId, activeServer.id), chartData);
+  await client.maxPlayers.set(
+    getServerDataKey(guildId, activeServer.id),
+    chartData
+  );
 
   if (info.isOnline) {
     onlineStats.uptime++;
@@ -459,7 +475,7 @@ async function performGuildUpdate(
             interval.statusMessage
           );
           await existingMsg.edit({ embeds: [serverEmbed] });
-        } catch (error) {
+        } catch {
           const newMsg = await statusChannel.send({ embeds: [serverEmbed] });
           interval.statusMessage = newMsg.id;
           await client.intervals.set(guildId, interval);

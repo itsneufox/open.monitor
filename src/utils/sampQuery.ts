@@ -76,14 +76,14 @@ export class SAMPQuery {
             if (!decoded.includes('ï¿½') && !decoded.includes('\ufffd')) {
               break;
             }
-          } catch (error) {
+          } catch {
             continue;
           }
         }
       }
 
       return decoded.trim();
-    } catch (error) {
+    } catch {
       return iconv.decode(buffer, 'latin1').trim();
     }
   }
@@ -296,7 +296,9 @@ export class SAMPQuery {
           }
 
           if (offset + nameLength > data.length) {
-            console.log(`Not enough data for player ${i} name (need ${nameLength} bytes)`);
+            console.log(
+              `Not enough data for player ${i} name (need ${nameLength} bytes)`
+            );
             break;
           }
 
@@ -317,16 +319,16 @@ export class SAMPQuery {
           if (name && name.length > 0) {
             players.push({ name, score });
           }
-
         } catch (playerError) {
           console.error(`Error parsing player ${i}:`, playerError);
           break;
         }
       }
 
-      console.log(`Successfully parsed ${players.length} players out of ${playerCount} reported`);
+      console.log(
+        `Successfully parsed ${players.length} players out of ${playerCount} reported`
+      );
       return players;
-
     } catch (error) {
       console.error('Error parsing players response:', error);
       return [];
@@ -372,7 +374,7 @@ export class SAMPQuery {
 
   private parsePingResponse(
     data: Buffer,
-    sentSequence: number[]
+    _sentSequence: number[]
   ): SAMPPing | null {
     try {
       if (data.length < 15) return null;
@@ -415,7 +417,10 @@ export class SAMPQuery {
       if (offset + 4 <= data.length) {
         const lightBannerLength = data.readUInt32LE(offset);
         offset += 4;
-        if (lightBannerLength > 0 && offset + lightBannerLength <= data.length) {
+        if (
+          lightBannerLength > 0 &&
+          offset + lightBannerLength <= data.length
+        ) {
           extraInfo.lightBanner = this.decodeString(
             data.subarray(offset, offset + lightBannerLength)
           );
@@ -516,7 +521,9 @@ export class SAMPQuery {
     server: ServerConfig,
     guildId: string = 'unknown'
   ): Promise<{ players: number; isOnline: boolean; gamemode?: string } | null> {
-    console.log(`[getQuickStatus] guildId: ${guildId}, server: ${server.ip}:${server.port}`);
+    console.log(
+      `[getQuickStatus] guildId: ${guildId}, server: ${server.ip}:${server.port}`
+    );
 
     const data = await this.query(server, 'i', guildId, undefined, true);
     if (!data) return null;
@@ -527,15 +534,14 @@ export class SAMPQuery {
     return {
       players: info.players,
       isOnline: true,
-      gamemode: info.gamemode
+      gamemode: info.gamemode,
     };
   }
 
   public async getServerMetadata(
     server: ServerConfig,
     guildId: string = 'unknown'
-  ): Promise<any | null> {
-
+  ): Promise<ServerMetadata | null> {
     try {
       console.log(`Fetching full metadata for ${server.ip}:${server.port}`);
 
@@ -553,7 +559,11 @@ export class SAMPQuery {
           const rules = await this.getServerRules(server, guildId, false);
           version = rules.version || 'open.mp';
 
-          const extraInfo = await this.getOpenMPExtraInfo(server, guildId, false);
+          const extraInfo = await this.getOpenMPExtraInfo(
+            server,
+            guildId,
+            false
+          );
           if (extraInfo) {
             banner = extraInfo.darkBanner || extraInfo.lightBanner;
             logo = extraInfo.logo;
@@ -577,7 +587,7 @@ export class SAMPQuery {
         version,
         isOpenMP,
         maxPlayers: info.maxplayers,
-        lastUpdated: Date.now()
+        lastUpdated: Date.now(),
       };
 
       if (banner) {
@@ -588,7 +598,6 @@ export class SAMPQuery {
       }
 
       return metadata;
-
     } catch (error) {
       console.error('Error fetching server metadata:', error);
       return null;
@@ -600,7 +609,9 @@ export class SAMPQuery {
     guildId: string = 'unknown',
     isMonitoring: boolean = false
   ): Promise<SAMPInfo | null> {
-    console.log(`[getServerInfo] guildId: ${guildId}, server: ${server.ip}:${server.port}, isMonitoring: ${isMonitoring}`);
+    console.log(
+      `[getServerInfo] guildId: ${guildId}, server: ${server.ip}:${server.port}, isMonitoring: ${isMonitoring}`
+    );
 
     const data = await this.query(
       server,
@@ -611,7 +622,6 @@ export class SAMPQuery {
     );
     return data ? this.parseInfoResponse(data) : null;
   }
-
 
   public async getServerRules(
     server: ServerConfig,
@@ -632,7 +642,9 @@ export class SAMPQuery {
     server: ServerConfig,
     guildId: string = 'unknown'
   ): Promise<SAMPPlayer[]> {
-    console.log(`[getPlayers] guildId: ${guildId}, server: ${server.ip}:${server.port}`);
+    console.log(
+      `[getPlayers] guildId: ${guildId}, server: ${server.ip}:${server.port}`
+    );
     console.log(`[DEBUG] Querying players for ${server.ip}:${server.port}`);
 
     const data = await this.query(server, 'c', guildId);
@@ -643,7 +655,9 @@ export class SAMPQuery {
     }
 
     console.log(`[DEBUG] Response length: ${data.length} bytes`);
-    console.log(`[DEBUG] First 20 bytes: ${data.subarray(0, 20).toString('hex')}`);
+    console.log(
+      `[DEBUG] First 20 bytes: ${data.subarray(0, 20).toString('hex')}`
+    );
 
     if (data.length < 11 || data.toString('ascii', 0, 4) !== 'SAMP') {
       console.log('[DEBUG] Invalid SAMP response header');
@@ -668,7 +682,9 @@ export class SAMPQuery {
     server: ServerConfig,
     guildId: string = 'unknown'
   ): Promise<SAMPDetailedPlayer[]> {
-    console.log(`[getDetailedPlayers] guildId: ${guildId}, server: ${server.ip}:${server.port}`);
+    console.log(
+      `[getDetailedPlayers] guildId: ${guildId}, server: ${server.ip}:${server.port}`
+    );
 
     const data = await this.query(server, 'd', guildId);
     return data ? this.parseDetailedPlayersResponse(data) : [];
@@ -707,7 +723,13 @@ export class SAMPQuery {
     isMonitoring: boolean = false
   ): Promise<boolean> {
     try {
-      const data = await this.query(server, 'o', guildId, undefined, isMonitoring);
+      const data = await this.query(
+        server,
+        'o',
+        guildId,
+        undefined,
+        isMonitoring
+      );
       if (data !== null && data.length > 11) {
         return true;
       }
@@ -723,7 +745,7 @@ export class SAMPQuery {
       }
 
       return false;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -742,7 +764,7 @@ export class SAMPQuery {
         isMonitoring
       );
       return data ? this.parseOpenMPExtraInfo(data) : null;
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -852,14 +874,16 @@ export class SAMPQuery {
       packet[5] = ipOctets[1] || 0;
       packet[6] = ipOctets[2] || 0;
       packet[7] = ipOctets[3] || 0;
-      packet[8] = server.port & 0xFF;
-      packet[9] = (server.port >> 8) & 0xFF;
+      packet[8] = server.port & 0xff;
+      packet[9] = (server.port >> 8) & 0xff;
       packet[10] = 'c'.charCodeAt(0);
 
       console.log(`Sending packet: ${packet.toString('hex')}`);
 
       socket.on('message', (data, rinfo) => {
-        console.log(`Received ${data.length} bytes from ${rinfo.address}:${rinfo.port}`);
+        console.log(
+          `Received ${data.length} bytes from ${rinfo.address}:${rinfo.port}`
+        );
         console.log(`Raw response: ${data.toString('hex')}`);
 
         if (data.length >= 13) {
@@ -870,7 +894,11 @@ export class SAMPQuery {
             console.log('Response has players - parsing issue in bot!');
 
             let offset = 13;
-            for (let i = 0; i < Math.min(3, playerCount) && offset < data.length; i++) {
+            for (
+              let i = 0;
+              i < Math.min(3, playerCount) && offset < data.length;
+              i++
+            ) {
               try {
                 const nameLength = data.readUInt8(offset);
                 offset += 1;
@@ -899,7 +927,7 @@ export class SAMPQuery {
         socket.close();
       });
 
-      socket.on('error', (err) => {
+      socket.on('error', err => {
         console.error('Socket error:', err);
         socket.close();
       });
@@ -909,7 +937,7 @@ export class SAMPQuery {
         socket.close();
       }, 5000);
 
-      socket.send(packet, server.port, server.ip, (err) => {
+      socket.send(packet, server.port, server.ip, err => {
         if (err) {
           console.error('Send error:', err);
           clearTimeout(timeout);
@@ -918,13 +946,15 @@ export class SAMPQuery {
           console.log('Packet sent successfully');
         }
       });
-
     } catch (error) {
       console.error('Test error:', error);
     }
   }
 
-  public async debugServer(server: ServerConfig, guildId: string = 'unknown'): Promise<void> {
+  public async debugServer(
+    server: ServerConfig,
+    guildId: string = 'unknown'
+  ): Promise<void> {
     console.log(`=== DEBUGGING SERVER ${server.ip}:${server.port} ===`);
 
     try {
@@ -943,7 +973,9 @@ export class SAMPQuery {
       if (rawData) {
         console.log(`Raw response length: ${rawData.length}`);
         console.log(`Raw response (hex): ${rawData.toString('hex')}`);
-        console.log(`Raw response (first 50 bytes): ${rawData.subarray(0, Math.min(50, rawData.length)).toString('hex')}`);
+        console.log(
+          `Raw response (first 50 bytes): ${rawData.subarray(0, Math.min(50, rawData.length)).toString('hex')}`
+        );
 
         const players = this.parsePlayersResponse(rawData);
         console.log(`Parsed players: ${players.length}`);
@@ -954,7 +986,6 @@ export class SAMPQuery {
       console.log('3. Testing rules query...');
       const rules = await this.getServerRules(server, guildId);
       console.log('Rules count:', Object.keys(rules).length);
-
     } catch (error) {
       console.error('Debug error:', error);
     }

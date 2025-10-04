@@ -5,7 +5,10 @@ import { CustomClient, getServerDataKey } from '../types';
 export const name = Events.ClientReady;
 export const once = true;
 
-const lastChannelUpdate = new Map<string, { time: number; count: number; online: boolean }>();
+const lastChannelUpdate = new Map<
+  string,
+  { time: number; count: number; online: boolean }
+>();
 
 export async function execute(client: CustomClient): Promise<void> {
   const isProduction = process.env.LOG_LEVEL === 'production';
@@ -39,7 +42,9 @@ export async function execute(client: CustomClient): Promise<void> {
       );
     }
 
-    const nextCheck = (await client.maxPlayers.get('next')) as number | undefined;
+    const nextCheck = (await client.maxPlayers.get('next')) as
+      | number
+      | undefined;
     if (!nextCheck) {
       const now = new Date();
       const tomorrow = new Date(now);
@@ -66,13 +71,19 @@ export async function execute(client: CustomClient): Promise<void> {
 
         if (!interval.activeServerId) continue;
 
-        const activeServer = servers.find(s => s.id === interval.activeServerId);
+        const activeServer = servers.find(
+          s => s.id === interval.activeServerId
+        );
         if (!activeServer) continue;
 
-        const { SecurityValidator } = require('../utils/securityValidator');
+        const { SecurityValidator } = await import(
+          '../utils/securityValidator'
+        );
         const banStatus = SecurityValidator.isIPBanned(activeServer.ip);
         if (banStatus.banned) {
-          console.log(`Skipping monitoring for banned IP: ${activeServer.ip} - ${banStatus.reason}`);
+          console.log(
+            `Skipping monitoring for banned IP: ${activeServer.ip} - ${banStatus.reason}`
+          );
           continue;
         }
 
@@ -144,16 +155,19 @@ export async function execute(client: CustomClient): Promise<void> {
                   );
                   await existingMsg.edit({ embeds: [serverEmbed] });
                   if (!isProduction) {
-                    console.log(`🔄 Updated status message in ${guild.name} (5min cycle)`);
+                    console.log(
+                      `🔄 Updated status message in ${guild.name} (5min cycle)`
+                    );
                   }
                   messageUpdated = true;
-                } catch (error) {
-                }
+                } catch {}
               }
 
               if (!messageUpdated) {
                 try {
-                  const newMsg = await statusChannel.send({ embeds: [serverEmbed] });
+                  const newMsg = await statusChannel.send({
+                    embeds: [serverEmbed],
+                  });
                   interval.statusMessage = newMsg.id;
                   if (!isProduction) {
                     console.log(`Created new status message in ${guild.name}`);
@@ -164,7 +178,10 @@ export async function execute(client: CustomClient): Promise<void> {
               }
             }
           } catch (error) {
-            console.error(`Failed to update status channel for ${guild.name}:`, error);
+            console.error(
+              `Failed to update status channel for ${guild.name}:`,
+              error
+            );
           }
 
           interval.next = now + 300000;
@@ -210,8 +227,7 @@ export async function execute(client: CustomClient): Promise<void> {
                         `🔊 Updated player count channel in ${guild.name}: ${newName} (10min cycle)`
                       );
                     }
-                  } catch (error: any) {
-                  }
+                  } catch {}
                 }
               }
             },
@@ -223,7 +239,6 @@ export async function execute(client: CustomClient): Promise<void> {
 
         await client.intervals.set(guild.id, interval);
         client.guildConfigs.set(guild.id, guildConfig);
-
       } catch (error) {
         console.error(`Error processing guild ${guild.name}:`, error);
       }
@@ -283,17 +298,22 @@ export async function execute(client: CustomClient): Promise<void> {
 
           if (chartValue === 0) {
             try {
-              const currentInfo = await client.rateLimitManager.executeWithRetry(
-                () => getPlayerCount(activeServer, guild.id, true),
-                2
-              );
+              const currentInfo =
+                await client.rateLimitManager.executeWithRetry(
+                  () => getPlayerCount(activeServer, guild.id, true),
+                  2
+                );
               chartValue = currentInfo.isOnline ? currentInfo.playerCount : 0;
               if (!isProduction) {
-                console.log(`Using current player count for chart: ${chartValue} players`);
+                console.log(
+                  `Using current player count for chart: ${chartValue} players`
+                );
               }
-            } catch (error) {
+            } catch {
               if (!isProduction) {
-                console.log(`Could not get current player count for chart, using 0`);
+                console.log(
+                  `Could not get current player count for chart, using 0`
+                );
               }
               chartValue = 0;
             }
@@ -326,14 +346,20 @@ export async function execute(client: CustomClient): Promise<void> {
 
                 if (data.msg) {
                   try {
-                    const oldMessage = await chartChannel.messages.fetch(data.msg);
+                    const oldMessage = await chartChannel.messages.fetch(
+                      data.msg
+                    );
                     await oldMessage.delete();
                     if (!isProduction) {
-                      console.log(`Deleted old chart message for ${activeServer.name} in ${guild.name}`);
+                      console.log(
+                        `Deleted old chart message for ${activeServer.name} in ${guild.name}`
+                      );
                     }
                   } catch (error) {
                     if (!isProduction) {
-                      console.log(`Could not delete old chart message for ${activeServer.name}: ${error}`);
+                      console.log(
+                        `Could not delete old chart message for ${activeServer.name}: ${error}`
+                      );
                     }
                   }
                 }
@@ -348,15 +374,23 @@ export async function execute(client: CustomClient): Promise<void> {
 
                 chartsGenerated++;
                 if (!isProduction) {
-                  console.log(`Chart sent to ${guild.name} for ${activeServer.name} (value: ${chartValue})`);
+                  console.log(
+                    `Chart sent to ${guild.name} for ${activeServer.name} (value: ${chartValue})`
+                  );
                 }
               } catch (chartError) {
-                console.error(`Failed to send chart to ${guild.name}:`, chartError);
+                console.error(
+                  `Failed to send chart to ${guild.name}:`,
+                  chartError
+                );
               }
             }
           }
         } catch (error) {
-          console.error(`Error generating chart for guild ${guild.name}:`, error);
+          console.error(
+            `Error generating chart for guild ${guild.name}:`,
+            error
+          );
         }
       }
 
@@ -378,7 +412,10 @@ export async function execute(client: CustomClient): Promise<void> {
             data.maxPlayersToday = 0;
             await client.maxPlayers.set(serverDataKey, data);
           } catch (error) {
-            console.error(`Error resetting daily data for guild ${guild.name}:`, error);
+            console.error(
+              `Error resetting daily data for guild ${guild.name}:`,
+              error
+            );
           }
         }
         if (!isProduction) {
@@ -394,7 +431,7 @@ export async function execute(client: CustomClient): Promise<void> {
     setInterval(() => {
       const queueStats = client.rateLimitManager.getQueueStats();
       const activeQueues = Object.entries(queueStats).filter(
-        ([_, stats]) => (stats as any).size > 0
+        ([_, stats]) => (stats as { size: number }).size > 0
       );
 
       if (activeQueues.length > 0) {

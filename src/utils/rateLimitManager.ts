@@ -1,7 +1,7 @@
-interface QueuedOperation {
-  execute: () => Promise<any>;
-  resolve: (value: any) => void;
-  reject: (error: any) => void;
+interface QueuedOperation<T = unknown> {
+  execute: () => Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (error: unknown) => void;
   priority: 'high' | 'normal' | 'low';
   retries: number;
   createdAt: number;
@@ -71,8 +71,8 @@ export class RateLimitManager {
       }
     }
 
-    return new Promise((resolve, reject) => {
-      const operation: QueuedOperation = {
+    return new Promise<void>((resolve, reject) => {
+      const operation: QueuedOperation<void> = {
         execute: updateFn,
         resolve,
         reject,
@@ -83,12 +83,18 @@ export class RateLimitManager {
 
       // Set timeout for operation
       operation.timeout = setTimeout(() => {
-        this.removeOperationFromQueue(channelId, operation);
+        this.removeOperationFromQueue(
+          channelId,
+          operation as QueuedOperation<unknown>
+        );
         reject(new Error('Operation timeout'));
       }, this.MAX_OPERATION_AGE);
 
       // Insert based on priority
-      this.insertByPriority(queue, operation);
+      this.insertByPriority(
+        queue as QueuedOperation<unknown>[],
+        operation as QueuedOperation<unknown>
+      );
       stats.size = queue.length;
 
       this.processChannelQueue(channelId);
@@ -101,16 +107,19 @@ export class RateLimitManager {
     maxRetries: number = 3,
     baseDelay: number = 1000
   ): Promise<T> {
-    let lastError: any;
+    let lastError: unknown = new Error('Max retries exceeded');
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         return await operation();
-      } catch (error: any) {
+      } catch (error) {
         lastError = error;
 
         // Don't retry permission errors
-        if (error.code === 50013 || error.code === 50001) {
+        if (
+          (error as { code?: number }).code === 50013 ||
+          (error as { code?: number }).code === 50001
+        ) {
           throw error;
         }
 
@@ -131,9 +140,9 @@ export class RateLimitManager {
     throw lastError;
   }
 
-  private insertByPriority(
-    queue: QueuedOperation[],
-    operation: QueuedOperation
+  private insertByPriority<T>(
+    queue: QueuedOperation<T>[],
+    operation: QueuedOperation<T>
   ): void {
     const priorityOrder = { high: 0, normal: 1, low: 2 };
     const operationPriority = priorityOrder[operation.priority];
@@ -214,7 +223,7 @@ export class RateLimitManager {
           if (queue.length > 0) {
             await this.delay(2000);
           }
-        } catch (error: any) {
+        } catch (error) {
           stats.errors++;
 
           if (this.shouldRetry(error, operation)) {
@@ -230,10 +239,13 @@ export class RateLimitManager {
 
             await this.delay(this.getRetryDelay(operation.retries));
           } else {
-            operation.reject(error);
+            operation.reject(error as Error);
 
             // For permission errors, clear the entire queue
-            if (error.code === 50013 || error.code === 50001) {
+            if (
+              (error as { code?: number }).code === 50013 ||
+              (error as { code?: number }).code === 50001
+            ) {
               console.warn(
                 `Clearing queue for ${channelId} due to permission error`
               );
@@ -249,9 +261,12 @@ export class RateLimitManager {
     }
   }
 
-  private shouldRetry(error: any, operation: QueuedOperation): boolean {
+  private shouldRetry(error: unknown, operation: QueuedOperation): boolean {
     // Don't retry permission errors
-    if (error.code === 50013 || error.code === 50001) {
+    if (
+      (error as { code?: number }).code === 50013 ||
+      (error as { code?: number }).code === 50001
+    ) {
       return false;
     }
 
@@ -266,11 +281,12 @@ export class RateLimitManager {
     }
 
     // Retry rate limits and network errors
-    return (
-      error.code === 429 ||
-      error.code === 'ENOTFOUND' ||
-      error.code === 'ECONNRESET' ||
-      error.message?.includes('timeout')
+    const err = error as { code?: number | string; message?: string };
+    return !!(
+      err.code === 429 ||
+      err.code === 'ENOTFOUND' ||
+      err.code === 'ECONNRESET' ||
+      err.message?.includes('timeout')
     );
   }
 
@@ -335,8 +351,24 @@ export class RateLimitManager {
   }
 
   // Enhanced statistics
-  getQueueStats(): Record<string, any> {
-    const stats: Record<string, any> = {};
+  getQueueStats(): Record<
+    string,
+    {
+      size: number;
+      errors: number;
+      totalProcessed: number;
+      isProcessing: boolean;
+    }
+  > {
+    const stats: Record<
+      string,
+      {
+        size: number;
+        errors: number;
+        totalProcessed: number;
+        isProcessing: boolean;
+      }
+    > = {};
 
     for (const [channelId, queueStats] of this.queueStats.entries()) {
       stats[channelId] = {

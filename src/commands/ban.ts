@@ -45,19 +45,15 @@ export const data = new SlashCommandBuilder()
       )
   )
   .addSubcommand(subcommand =>
-    subcommand
-      .setName('list')
-      .setDescription('List all banned IP addresses')
+    subcommand.setName('list').setDescription('List all banned IP addresses')
   )
   .addSubcommand(subcommand =>
-    subcommand
-      .setName('clear')
-      .setDescription('Clear all banned IP addresses')
+    subcommand.setName('clear').setDescription('Clear all banned IP addresses')
   );
 
 export async function execute(
   interaction: ChatInputCommandInteraction,
-  client: CustomClient
+  _client: CustomClient
 ): Promise<void> {
   if (interaction.user.id !== process.env.OWNER_ID) {
     await interaction.reply({
@@ -89,10 +85,11 @@ async function handleBanIP(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const ipAddress = interaction.options.getString('address', true);
-  const reason = interaction.options.getString('reason') || 'Manually banned by owner';
+  const reason =
+    interaction.options.getString('reason') || 'Manually banned by owner';
 
   try {
-    const { SecurityValidator } = require('../utils/securityValidator');
+    const { SecurityValidator } = await import('../utils/securityValidator');
     const result = SecurityValidator.banIP(ipAddress, reason);
 
     const embed = new EmbedBuilder()
@@ -127,7 +124,7 @@ async function handleBanIP(interaction: ChatInputCommandInteraction) {
     }
 
     await interaction.editReply({ embeds: [embed] });
-  } catch (error) {
+  } catch {
     await interaction.editReply('Error accessing security validator.');
   }
 }
@@ -138,7 +135,7 @@ async function handleUnbanIP(interaction: ChatInputCommandInteraction) {
   const ipAddress = interaction.options.getString('address', true);
 
   try {
-    const { SecurityValidator } = require('../utils/securityValidator');
+    const { SecurityValidator } = await import('../utils/securityValidator');
     const result = SecurityValidator.unbanIP(ipAddress);
 
     const embed = new EmbedBuilder()
@@ -173,7 +170,7 @@ async function handleUnbanIP(interaction: ChatInputCommandInteraction) {
     }
 
     await interaction.editReply({ embeds: [embed] });
-  } catch (error) {
+  } catch {
     await interaction.editReply('Error accessing security validator.');
   }
 }
@@ -182,7 +179,7 @@ async function handleListBanned(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    const { SecurityValidator } = require('../utils/securityValidator');
+    const { SecurityValidator } = await import('../utils/securityValidator');
     const bannedIPs: BannedIP[] = SecurityValidator.getBannedIPs();
 
     const embed = new EmbedBuilder()
@@ -195,16 +192,23 @@ async function handleListBanned(interaction: ChatInputCommandInteraction) {
     } else {
       const bannedList = bannedIPs
         .map((ban: BannedIP) => {
-          const timeSinceBan = Math.floor((Date.now() - ban.bannedAt) / 1000 / 60);
+          const timeSinceBan = Math.floor(
+            (Date.now() - ban.bannedAt) / 1000 / 60
+          );
           return `**${ban.ip}**\nReason: ${ban.reason}\nBanned: ${timeSinceBan}m ago\nFailures: ${ban.failures}`;
         })
         .join('\n\n');
 
       if (bannedList.length > 4096) {
-        embed.setDescription(`Too many banned IPs to display. Total: ${bannedIPs.length}`);
+        embed.setDescription(
+          `Too many banned IPs to display. Total: ${bannedIPs.length}`
+        );
         embed.addFields({
           name: 'Recent Bans',
-          value: bannedIPs.slice(0, 5).map((ban: BannedIP) => `${ban.ip} - ${ban.reason}`).join('\n'),
+          value: bannedIPs
+            .slice(0, 5)
+            .map((ban: BannedIP) => `${ban.ip} - ${ban.reason}`)
+            .join('\n'),
           inline: false,
         });
       } else {
@@ -213,7 +217,7 @@ async function handleListBanned(interaction: ChatInputCommandInteraction) {
     }
 
     await interaction.editReply({ embeds: [embed] });
-  } catch (error) {
+  } catch {
     await interaction.editReply('Error fetching banned IP list.');
   }
 }
@@ -222,7 +226,7 @@ async function handleClearBanned(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    const { SecurityValidator } = require('../utils/securityValidator');
+    const { SecurityValidator } = await import('../utils/securityValidator');
     const count = SecurityValidator.clearAllBans();
 
     const embed = new EmbedBuilder()
@@ -232,7 +236,7 @@ async function handleClearBanned(interaction: ChatInputCommandInteraction) {
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });
-  } catch (error) {
+  } catch {
     await interaction.editReply('Error clearing banned IPs.');
   }
 }

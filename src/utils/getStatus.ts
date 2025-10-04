@@ -28,14 +28,15 @@ export async function getStatus(
     const rules = await sampQuery.getServerRules(server, guildId, isMonitoring);
 
     let detectedVersion = 'Unknown';
-    let serverType = 'Unknown';
 
     if (isOpenMP) {
       statusTitle = 'open.mp Server Status';
-      serverType = 'open.mp';
 
       if (rules.version) {
-        if (rules.version.includes('omp ') || rules.version.includes('open.mp')) {
+        if (
+          rules.version.includes('omp ') ||
+          rules.version.includes('open.mp')
+        ) {
           detectedVersion = rules.version;
         } else {
           detectedVersion = `open.mp ${rules.version}`;
@@ -47,7 +48,6 @@ export async function getStatus(
       }
     } else {
       statusTitle = 'SA:MP Server Status';
-      serverType = 'SA:MP';
 
       if (rules.version && !rules.version.includes('omp')) {
         if (rules.version.includes('SA:MP') || rules.version.includes('0.3')) {
@@ -56,9 +56,13 @@ export async function getStatus(
           detectedVersion = `SA:MP ${rules.version}`;
         }
       } else if (rules.Ver && !rules.Ver.includes('omp')) {
-        detectedVersion = rules.Ver.includes('SA:MP') ? rules.Ver : `SA:MP ${rules.Ver}`;
+        detectedVersion = rules.Ver.includes('SA:MP')
+          ? rules.Ver
+          : `SA:MP ${rules.Ver}`;
       } else if (rules.v && !rules.v.includes('omp')) {
-        detectedVersion = rules.v.includes('SA:MP') ? rules.v : `SA:MP ${rules.v}`;
+        detectedVersion = rules.v.includes('SA:MP')
+          ? rules.v
+          : `SA:MP ${rules.v}`;
       } else {
         detectedVersion = 'SA:MP 0.3.7';
       }
