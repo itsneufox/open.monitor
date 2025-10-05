@@ -8,7 +8,16 @@ export async function getStatus(
   server: ServerConfig,
   color: number,
   guildId: string = 'unknown',
-  isMonitoring: boolean = false
+  isMonitoring: boolean = false,
+  theme: 'classic' | 'detailed' = 'classic',
+  client?: {
+    uptimes: {
+      get: (key: string) => Promise<{
+        uptime: number;
+        downtime: number;
+      } | null>;
+    };
+  }
 ): Promise<EmbedBuilder> {
   let statusTitle = 'Server Status';
   const embed = new EmbedBuilder().setColor(color).setTimestamp();
@@ -111,6 +120,49 @@ export async function getStatus(
       `**${info.hostname}**\n\`${server.ip}:${server.port}\``
     );
 
+    // Get uptime data if available
+    let uptimeDisplay = '✅ Online';
+    if (client?.uptimes) {
+      try {
+        const { getServerDataKey } = await import('../types');
+        const serverDataKey = getServerDataKey(guildId, server.id);
+        const uptimeStats = await client.uptimes.get(serverDataKey);
+
+        if (
+          uptimeStats &&
+          (uptimeStats.uptime > 0 || uptimeStats.downtime > 0)
+        ) {
+          const totalChecks = uptimeStats.uptime + uptimeStats.downtime;
+          const percentage = (uptimeStats.uptime / totalChecks) * 100;
+
+          let emoji = '⚪';
+          if (percentage >= 99) {
+            emoji = '🟢';
+          } else if (percentage >= 96) {
+            emoji = '🟡';
+          } else if (percentage >= 90) {
+            emoji = '🟠';
+          } else {
+            emoji = '🔴';
+          }
+
+          uptimeDisplay = `${emoji} ${percentage.toFixed(2)}%`;
+        }
+      } catch (error) {
+        // If uptime fetch fails, just show online status
+        console.log('Could not fetch uptime data:', error);
+      }
+    }
+
+    // Format website URL if available
+    let websiteUrl = 'N/A';
+    if (rules.weburl && typeof rules.weburl === 'string') {
+      const url = rules.weburl.trim();
+      if (url) {
+        websiteUrl = url.startsWith('http') ? url : `https://${url}`;
+      }
+    }
+
     embed.addFields(
       {
         name: 'Players',
@@ -121,8 +173,105 @@ export async function getStatus(
       { name: 'Language', value: info.language || 'Unknown', inline: true },
       { name: 'Version', value: detectedVersion, inline: true },
       { name: 'Password', value: info.password ? 'Yes' : 'No', inline: true },
-      { name: 'Status', value: '✅ Online', inline: true }
+      { name: 'Uptime', value: uptimeDisplay, inline: true }
     );
+
+    // Add website URL if available
+    if (websiteUrl !== 'N/A') {
+      embed.addFields({
+        name: 'Website',
+        value: websiteUrl,
+        inline: true,
+      });
+    }
+
+    // Add player list if detailed theme is enabled
+    if (theme === 'detailed' && info.players > 0 && info.players <= 100) {
+      try {
+        let players: Array<{ name: string; score: number; ping?: number }> = [];
+
+        // Try detailed query first, then fall back to basic query
+        try {
+          const detailedPlayers = await sampQuery.getDetailedPlayers(
+            server,
+            guildId
+          );
+          if (detailedPlayers.length > 0) {
+            players = detailedPlayers.map(player => ({
+              name: player.name,
+              score: player.score,
+              ping: player.ping,
+            }));
+          }
+        } catch {
+          // Fallback to basic query
+          const basicPlayers = await sampQuery.getPlayers(server, guildId);
+          players = basicPlayers.map(player => ({
+            name: player.name,
+            score: player.score,
+          }));
+        }
+
+        if (players.length > 0) {
+          // Show only first 20 players to keep embed compact
+          const displayPlayers = players.slice(0, 20);
+          const nameColumnWidth = 16;
+          const scoreColumnWidth = 6;
+
+          let playerTable = '```\n';
+          playerTable += 'Name'.padEnd(nameColumnWidth) + ' Score\n';
+          playerTable +=
+            '-'.repeat(nameColumnWidth + scoreColumnWidth + 1) + '\n';
+
+          displayPlayers.forEach(player => {
+            const truncatedName =
+              player.name.length > nameColumnWidth - 1
+                ? player.name.substring(0, nameColumnWidth - 1)
+                : player.name;
+
+            const nameColumn = truncatedName.padEnd(nameColumnWidth);
+            const scoreColumn = player.score
+              .toString()
+              .padStart(scoreColumnWidth);
+
+            playerTable += `${nameColumn}${scoreColumn}\n`;
+          });
+
+          playerTable += '```';
+
+          const playerListTitle =
+            players.length > 20
+              ? `Online Players (showing 20/${players.length})`
+              : 'Online Players';
+
+          embed.addFields({
+            name: playerListTitle,
+            value: playerTable,
+            inline: false,
+          });
+
+          if (players.length > 20) {
+            embed.addFields({
+              name: 'View All Players',
+              value: 'Use `/players` to see the complete player list',
+              inline: false,
+            });
+          }
+        }
+      } catch (playerError) {
+        console.log(
+          'Could not fetch player list for detailed theme:',
+          playerError
+        );
+        // Don't add player list if there's an error, just continue with basic info
+      }
+    } else if (theme === 'detailed' && info.players > 100) {
+      embed.addFields({
+        name: 'Player List',
+        value: `Too many players (${info.players}) to display. Use \`/players\` command.`,
+        inline: false,
+      });
+    }
 
     return embed;
   } catch (error) {

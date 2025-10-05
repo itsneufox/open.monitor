@@ -29,6 +29,7 @@ export interface IntervalConfig {
   dataLossNotificationSent?: boolean;
   preferredLanguage?: 'en' | 'pt' | 'es';
   lastVoiceUpdate?: number;
+  statusTheme?: 'classic' | 'detailed';
 }
 
 export interface PlayerCountResult {

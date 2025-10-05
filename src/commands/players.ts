@@ -105,6 +105,29 @@ export async function execute(
     `[players command] Target server: ${targetServer.ip}:${targetServer.port}`
   );
 
+  // Check if server is banned first
+  const { SecurityValidator } = await import('../utils/securityValidator');
+  const serverAddress = `${targetServer.ip}:${targetServer.port}`;
+  const banCheck = SecurityValidator.isIPBanned(serverAddress);
+
+  if (banCheck.banned) {
+    const embed = new EmbedBuilder()
+      .setColor(0xff0000)
+      .setTitle('🚫 Server Banned')
+      .setDescription(
+        `**${targetServer.name}** has been permanently banned from monitoring.`
+      )
+      .addFields({
+        name: 'Reason',
+        value: banCheck.reason || 'Server is banned',
+        inline: false,
+      })
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
+    return;
+  }
+
   try {
     console.log(
       `Getting server info for ${targetServer.ip}:${targetServer.port}`

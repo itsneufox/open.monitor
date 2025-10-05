@@ -19,6 +19,18 @@ export async function execute(client: CustomClient): Promise<void> {
   try {
     let totalServers = 0;
     let totalGuilds = 0;
+    let monitoringEnabled = 0;
+    let totalPlayers = 0;
+    let totalMaxPlayers = 0;
+    let onlineServers = 0;
+    let offlineServers = 0;
+    let classicTheme = 0;
+    let detailedTheme = 0;
+
+    // Import utilities
+    const { SAMPQuery } = await import('../utils/sampQuery');
+    const { SecurityValidator } = await import('../utils/securityValidator');
+    const sampQuery = new SAMPQuery();
 
     for (const guild of client.guilds.cache.values()) {
       const servers = (await client.servers.get(guild.id)) || [];
@@ -28,6 +40,16 @@ export async function execute(client: CustomClient): Promise<void> {
       client.guildConfigs.set(guild.id, guildConfig);
       totalServers += servers.length;
       totalGuilds++;
+
+      if (interval?.enabled) {
+        monitoringEnabled++;
+      }
+
+      if (interval?.statusTheme === 'detailed') {
+        detailedTheme++;
+      } else {
+        classicTheme++;
+      }
 
       if (!isProduction) {
         console.log(
@@ -41,6 +63,56 @@ export async function execute(client: CustomClient): Promise<void> {
         `Loaded configurations: ${totalGuilds} guilds, ${totalServers} servers`
       );
     }
+
+    // Count banned servers
+    const bannedServers = SecurityValidator.getBannedServersCount();
+
+    // Get quick player count from active servers (limited to prevent slow startup)
+    const playerCheckPromises: Promise<void>[] = [];
+    let checkedServers = 0;
+    const maxChecks = 10; // Limit initial checks to keep startup fast
+
+    for (const guild of client.guilds.cache.values()) {
+      if (checkedServers >= maxChecks) break;
+
+      const servers = (await client.servers.get(guild.id)) || [];
+      const interval = await client.intervals.get(guild.id);
+
+      if (interval?.activeServerId && interval.enabled) {
+        const activeServer = servers.find(
+          s => s.id === interval.activeServerId
+        );
+        if (activeServer) {
+          checkedServers++;
+          playerCheckPromises.push(
+            (async () => {
+              try {
+                const info = await sampQuery.getServerInfo(
+                  activeServer,
+                  guild.id,
+                  false
+                );
+                if (info) {
+                  totalPlayers += info.players;
+                  totalMaxPlayers += info.maxplayers;
+                  onlineServers++;
+                } else {
+                  offlineServers++;
+                }
+              } catch {
+                offlineServers++;
+              }
+            })()
+          );
+        }
+      }
+    }
+
+    // Wait for player counts with timeout
+    await Promise.race([
+      Promise.allSettled(playerCheckPromises),
+      new Promise(resolve => setTimeout(resolve, 5000)), // 5s timeout
+    ]);
 
     const nextCheck = (await client.maxPlayers.get('next')) as
       | number
@@ -57,15 +129,54 @@ export async function execute(client: CustomClient): Promise<void> {
       }
     }
 
-    // Log bot startup to webhook
+    // Log bot startup to webhook with detailed info
     const { WebhookLogger } = await import('../utils/webhookLogger');
+    const fields: Array<{ name: string; value: string; inline?: boolean }> = [
+      { name: 'Discord Guilds', value: `${totalGuilds}`, inline: true },
+      { name: 'Configured Servers', value: `${totalServers}`, inline: true },
+      {
+        name: 'Monitoring Active',
+        value: `${monitoringEnabled}/${totalGuilds}`,
+        inline: true,
+      },
+    ];
+
+    // Add player stats if we checked any servers
+    if (checkedServers > 0) {
+      fields.push(
+        {
+          name: 'Active Servers Checked',
+          value: `${checkedServers} (${onlineServers} online, ${offlineServers} offline)`,
+          inline: true,
+        },
+        {
+          name: 'Total Players Online',
+          value: `${totalPlayers}/${totalMaxPlayers}`,
+          inline: true,
+        }
+      );
+    }
+
+    // Add banned servers count
+    if (bannedServers > 0) {
+      fields.push({
+        name: '🚫 Banned Servers',
+        value: `${bannedServers}`,
+        inline: true,
+      });
+    }
+
+    // Add theme statistics
+    fields.push({
+      name: 'Theme Usage',
+      value: `📋 Classic: ${classicTheme}\n📊 Detailed: ${detailedTheme}`,
+      inline: true,
+    });
+
     WebhookLogger.success({
       title: 'Bot Started',
       description: `${client.user!.tag} is now online and monitoring servers`,
-      fields: [
-        { name: 'Guilds', value: `${totalGuilds}`, inline: true },
-        { name: 'Servers', value: `${totalServers}`, inline: true },
-      ],
+      fields,
     });
   } catch (error) {
     console.error('Error loading guild configurations:', error);
@@ -113,47 +224,48 @@ export async function execute(client: CustomClient): Promise<void> {
 
               if (statusChannel) {
                 const color = getRoleColor(guild);
+                const theme = interval.statusTheme || 'classic';
                 const serverEmbed = await getStatus(
                   activeServer,
                   color,
                   guild.id,
-                  true
+                  true,
+                  theme,
+                  client
                 );
 
-                let messageUpdated = false;
-
+                // Delete old message and create new one
                 if (interval.statusMessage) {
                   try {
                     const existingMsg = await statusChannel.messages.fetch(
                       interval.statusMessage
                     );
-                    await existingMsg.edit({ embeds: [serverEmbed] });
+                    await existingMsg.delete();
                     if (!isProduction) {
                       console.log(
-                        `🔄 Updated banned server status in ${guild.name}`
+                        `🗑️  Deleted old status message in ${guild.name}`
                       );
                     }
-                    messageUpdated = true;
-                  } catch {}
+                  } catch {
+                    // Message might have been deleted already
+                  }
                 }
 
-                if (!messageUpdated) {
-                  try {
-                    const newMsg = await statusChannel.send({
-                      embeds: [serverEmbed],
-                    });
-                    interval.statusMessage = newMsg.id;
-                    if (!isProduction) {
-                      console.log(
-                        `Created new banned server status in ${guild.name}`
-                      );
-                    }
-                  } catch (sendError) {
-                    console.error(
-                      `Failed to send banned server status:`,
-                      sendError
+                try {
+                  const newMsg = await statusChannel.send({
+                    embeds: [serverEmbed],
+                  });
+                  interval.statusMessage = newMsg.id;
+                  if (!isProduction) {
+                    console.log(
+                      `✉️  Created new banned server status in ${guild.name}`
                     );
                   }
+                } catch (sendError) {
+                  console.error(
+                    `Failed to send banned server status:`,
+                    sendError
+                  );
                 }
               }
             } catch (error) {
@@ -210,6 +322,39 @@ export async function execute(client: CustomClient): Promise<void> {
             interval.lastVoiceUpdate = now;
           }
 
+          // Update IP channel to hide IP when banned
+          if (voiceUpdateDue && interval.serverIpChannel) {
+            await client.rateLimitManager.queueChannelUpdate(
+              interval.serverIpChannel,
+              async () => {
+                const serverIpChannel = await client.channels
+                  .fetch(interval.serverIpChannel!)
+                  .catch(() => null);
+
+                if (
+                  serverIpChannel &&
+                  serverIpChannel.type === ChannelType.GuildVoice
+                ) {
+                  const channel = serverIpChannel as VoiceChannel;
+                  const newName = '🚫 Server Banned';
+
+                  if (channel.name !== newName) {
+                    try {
+                      await channel.setName(newName);
+
+                      if (!isProduction) {
+                        console.log(
+                          `🔊 Updated banned server IP channel in ${guild.name}: ${newName}`
+                        );
+                      }
+                    } catch {}
+                  }
+                }
+              },
+              'low'
+            );
+          }
+
           await client.intervals.set(guild.id, interval);
           client.guildConfigs.set(guild.id, guildConfig);
           continue;
@@ -260,42 +405,45 @@ export async function execute(client: CustomClient): Promise<void> {
 
             if (statusChannel) {
               const color = getRoleColor(guild);
+              const theme = interval.statusTheme || 'classic';
               const serverEmbed = await getStatus(
                 activeServer,
                 color,
                 guild.id,
-                true
+                true,
+                theme,
+                client
               );
 
-              let messageUpdated = false;
-
+              // Delete old message and create new one
               if (interval.statusMessage) {
                 try {
                   const existingMsg = await statusChannel.messages.fetch(
                     interval.statusMessage
                   );
-                  await existingMsg.edit({ embeds: [serverEmbed] });
+                  await existingMsg.delete();
                   if (!isProduction) {
                     console.log(
-                      `🔄 Updated status message in ${guild.name} (5min cycle)`
+                      `🗑️  Deleted old status message in ${guild.name}`
                     );
                   }
-                  messageUpdated = true;
-                } catch {}
+                } catch {
+                  // Message might have been deleted already
+                }
               }
 
-              if (!messageUpdated) {
-                try {
-                  const newMsg = await statusChannel.send({
-                    embeds: [serverEmbed],
-                  });
-                  interval.statusMessage = newMsg.id;
-                  if (!isProduction) {
-                    console.log(`Created new status message in ${guild.name}`);
-                  }
-                } catch (sendError) {
-                  console.error(`Failed to send status message:`, sendError);
+              try {
+                const newMsg = await statusChannel.send({
+                  embeds: [serverEmbed],
+                });
+                interval.statusMessage = newMsg.id;
+                if (!isProduction) {
+                  console.log(
+                    `✉️  Created new status message in ${guild.name}`
+                  );
                 }
+              } catch (sendError) {
+                console.error(`Failed to send status message:`, sendError);
               }
             }
           } catch (error) {

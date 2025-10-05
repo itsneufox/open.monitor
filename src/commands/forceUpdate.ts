@@ -467,24 +467,31 @@ async function performGuildUpdate(
 
     if (statusChannel && 'send' in statusChannel) {
       const color = getRoleColor(guild);
-      const serverEmbed = await getStatus(activeServer, color, guildId, true);
+      const theme = interval.statusTheme || 'classic';
+      const serverEmbed = await getStatus(
+        activeServer,
+        color,
+        guildId,
+        true,
+        theme,
+        client
+      );
 
+      // Delete old message and create new one
       if (interval.statusMessage) {
         try {
           const existingMsg = await statusChannel.messages.fetch(
             interval.statusMessage
           );
-          await existingMsg.edit({ embeds: [serverEmbed] });
+          await existingMsg.delete();
         } catch {
-          const newMsg = await statusChannel.send({ embeds: [serverEmbed] });
-          interval.statusMessage = newMsg.id;
-          await client.intervals.set(guildId, interval);
+          // Message might have been deleted already
         }
-      } else {
-        const newMsg = await statusChannel.send({ embeds: [serverEmbed] });
-        interval.statusMessage = newMsg.id;
-        await client.intervals.set(guildId, interval);
       }
+
+      const newMsg = await statusChannel.send({ embeds: [serverEmbed] });
+      interval.statusMessage = newMsg.id;
+      await client.intervals.set(guildId, interval);
     }
   }
 

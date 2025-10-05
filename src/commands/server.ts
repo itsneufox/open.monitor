@@ -997,8 +997,19 @@ async function handleStatus(
     // Get role color for embed
     const color = getRoleColor(interaction.guild!);
 
+    // Get theme setting
+    const intervalConfig = await client.intervals.get(interaction.guildId!);
+    const theme = intervalConfig?.statusTheme || 'classic';
+
     // Get and send status
-    const embed = await getStatus(targetServer, color);
+    const embed = await getStatus(
+      targetServer,
+      color,
+      interaction.guildId!,
+      false,
+      theme,
+      client
+    );
 
     // Add server name to embed title if it's different from detected name
     if (targetServer.name !== `${targetServer.ip}:${targetServer.port}`) {

@@ -652,6 +652,20 @@ class SecurityValidator {
 
     return recentQueries > 300 || recentNewIPs > 20;
   }
+
+  static getBannedServersCount(): number {
+    // Count hardcoded bans
+    let count = this.HARDCODED_BANS.size;
+
+    // Count dynamically banned servers
+    for (const data of this.ipQueryLimits.values()) {
+      if (data.banned) {
+        count++;
+      }
+    }
+
+    return count;
+  }
 }
 
 export { SecurityValidator };
