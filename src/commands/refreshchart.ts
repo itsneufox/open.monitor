@@ -213,12 +213,12 @@ async function generateChartForGuild(
     const currentValue = currentInfo.isOnline ? currentInfo.playerCount : 0;
 
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0);
     const todayTimestamp = today.getTime();
 
     const todayIndex = data.days.findIndex(day => {
       const dayDate = new Date(day.date);
-      dayDate.setHours(0, 0, 0, 0);
+      dayDate.setUTCHours(0, 0, 0, 0);
       return dayDate.getTime() === todayTimestamp;
     });
 
@@ -227,11 +227,11 @@ async function generateChartForGuild(
         data.days[todayIndex]!.value,
         currentValue
       );
-      data.days[todayIndex]!.date = Date.now();
+      data.days[todayIndex]!.date = todayTimestamp;
     } else {
       data.days.push({
         value: currentValue,
-        date: Date.now(),
+        date: todayTimestamp,
       });
     }
 

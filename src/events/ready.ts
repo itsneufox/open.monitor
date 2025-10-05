@@ -48,8 +48,8 @@ export async function execute(client: CustomClient): Promise<void> {
     if (!nextCheck) {
       const now = new Date();
       const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+      tomorrow.setUTCHours(0, 0, 0, 0);
 
       await client.maxPlayers.set('next', tomorrow.getTime());
       if (!isProduction) {
@@ -380,8 +380,8 @@ export async function execute(client: CustomClient): Promise<void> {
   function msUntilMidnight(): number {
     const now = new Date();
     const midnight = new Date(now);
-    midnight.setDate(midnight.getDate() + 1);
-    midnight.setHours(0, 0, 0, 0);
+    midnight.setUTCDate(midnight.getUTCDate() + 1);
+    midnight.setUTCHours(0, 0, 0, 0);
     return midnight.getTime() - now.getTime();
   }
 
@@ -451,9 +451,14 @@ export async function execute(client: CustomClient): Promise<void> {
             }
           }
 
+          // Create UTC midnight timestamp for the current day
+          const now = new Date();
+          const utcMidnight = new Date(now);
+          utcMidnight.setUTCHours(0, 0, 0, 0);
+
           const chartDataPoint = {
             value: chartValue,
-            date: Date.now(),
+            date: utcMidnight.getTime(),
           };
 
           data.days.push(chartDataPoint);
