@@ -14,7 +14,7 @@ export class WebhookLogger {
   private static queue: LogOptions[] = [];
   private static isProcessing: boolean = false;
   private static lastLog: number = 0;
-  private static readonly MIN_DELAY = 2000; // 2 seconds between logs
+  private static readonly MIN_DELAY = 2000; // 2 seconds delay between logs
 
   static initialize() {
     const webhookUrl = process.env.WEBHOOK_LOG_URL;
