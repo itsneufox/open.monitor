@@ -687,7 +687,11 @@ export class SAMPQuery {
     );
 
     const data = await this.query(server, 'd', guildId);
-    return data ? this.parseDetailedPlayersResponse(data) : [];
+    const result = data ? this.parseDetailedPlayersResponse(data) : [];
+    console.log(
+      `[getDetailedPlayers] Returned ${result.length} players for ${server.ip}:${server.port}`
+    );
+    return result;
   }
 
   public async getPing(

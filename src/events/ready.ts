@@ -234,38 +234,43 @@ export async function execute(client: CustomClient): Promise<void> {
                   client
                 );
 
-                // Delete old message and create new one
+                // Edit existing message or create new one
+                let messageUpdated = false;
+
                 if (interval.statusMessage) {
                   try {
                     const existingMsg = await statusChannel.messages.fetch(
                       interval.statusMessage
                     );
-                    await existingMsg.delete();
+                    await existingMsg.edit({ embeds: [serverEmbed] });
                     if (!isProduction) {
                       console.log(
-                        `🗑️  Deleted old status message in ${guild.name}`
+                        `🔄 Updated banned server status in ${guild.name}`
                       );
                     }
+                    messageUpdated = true;
                   } catch {
-                    // Message might have been deleted already
+                    // Message might have been deleted, create new one
                   }
                 }
 
-                try {
-                  const newMsg = await statusChannel.send({
-                    embeds: [serverEmbed],
-                  });
-                  interval.statusMessage = newMsg.id;
-                  if (!isProduction) {
-                    console.log(
-                      `✉️  Created new banned server status in ${guild.name}`
+                if (!messageUpdated) {
+                  try {
+                    const newMsg = await statusChannel.send({
+                      embeds: [serverEmbed],
+                    });
+                    interval.statusMessage = newMsg.id;
+                    if (!isProduction) {
+                      console.log(
+                        `✉️  Created new banned server status in ${guild.name}`
+                      );
+                    }
+                  } catch (sendError) {
+                    console.error(
+                      `Failed to send banned server status:`,
+                      sendError
                     );
                   }
-                } catch (sendError) {
-                  console.error(
-                    `Failed to send banned server status:`,
-                    sendError
-                  );
                 }
               }
             } catch (error) {
@@ -415,35 +420,40 @@ export async function execute(client: CustomClient): Promise<void> {
                 client
               );
 
-              // Delete old message and create new one
+              // Edit existing message or create new one
+              let messageUpdated = false;
+
               if (interval.statusMessage) {
                 try {
                   const existingMsg = await statusChannel.messages.fetch(
                     interval.statusMessage
                   );
-                  await existingMsg.delete();
+                  await existingMsg.edit({ embeds: [serverEmbed] });
                   if (!isProduction) {
                     console.log(
-                      `🗑️  Deleted old status message in ${guild.name}`
+                      `🔄 Updated status message in ${guild.name} (5min cycle)`
                     );
                   }
+                  messageUpdated = true;
                 } catch {
-                  // Message might have been deleted already
+                  // Message might have been deleted, create new one
                 }
               }
 
-              try {
-                const newMsg = await statusChannel.send({
-                  embeds: [serverEmbed],
-                });
-                interval.statusMessage = newMsg.id;
-                if (!isProduction) {
-                  console.log(
-                    `✉️  Created new status message in ${guild.name}`
-                  );
+              if (!messageUpdated) {
+                try {
+                  const newMsg = await statusChannel.send({
+                    embeds: [serverEmbed],
+                  });
+                  interval.statusMessage = newMsg.id;
+                  if (!isProduction) {
+                    console.log(
+                      `✉️  Created new status message in ${guild.name}`
+                    );
+                  }
+                } catch (sendError) {
+                  console.error(`Failed to send status message:`, sendError);
                 }
-              } catch (sendError) {
-                console.error(`Failed to send status message:`, sendError);
               }
             }
           } catch (error) {

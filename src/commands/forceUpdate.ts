@@ -477,21 +477,23 @@ async function performGuildUpdate(
         client
       );
 
-      // Delete old message and create new one
+      // Edit existing message or create new one
       if (interval.statusMessage) {
         try {
           const existingMsg = await statusChannel.messages.fetch(
             interval.statusMessage
           );
-          await existingMsg.delete();
+          await existingMsg.edit({ embeds: [serverEmbed] });
         } catch {
-          // Message might have been deleted already
+          const newMsg = await statusChannel.send({ embeds: [serverEmbed] });
+          interval.statusMessage = newMsg.id;
+          await client.intervals.set(guildId, interval);
         }
+      } else {
+        const newMsg = await statusChannel.send({ embeds: [serverEmbed] });
+        interval.statusMessage = newMsg.id;
+        await client.intervals.set(guildId, interval);
       }
-
-      const newMsg = await statusChannel.send({ embeds: [serverEmbed] });
-      interval.statusMessage = newMsg.id;
-      await client.intervals.set(guildId, interval);
     }
   }
 
