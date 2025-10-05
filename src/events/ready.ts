@@ -1,5 +1,6 @@
 import { Events, TextChannel, VoiceChannel, ChannelType } from 'discord.js';
 import { getChart, getStatus, getPlayerCount, getRoleColor } from '../utils';
+import { getMidnightInTimezone } from '../utils/timezoneUtils';
 import { CustomClient, getServerDataKey } from '../types';
 
 export const name = Events.ClientReady;
@@ -42,18 +43,17 @@ export async function execute(client: CustomClient): Promise<void> {
       );
     }
 
-    const nextCheck = (await client.maxPlayers.get('next')) as
-      | number
+    // Initialize chart generation tracking
+    const chartGenerationTracker = (await client.maxPlayers.get(
+      'chartGeneration'
+    )) as
+      | { [guildId: string]: { lastGenerated: number; timezone: string } }
       | undefined;
-    if (!nextCheck) {
-      const now = new Date();
-      const tomorrow = new Date(now);
-      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-      tomorrow.setUTCHours(0, 0, 0, 0);
 
-      await client.maxPlayers.set('next', tomorrow.getTime());
+    if (!chartGenerationTracker) {
+      await client.maxPlayers.set('chartGeneration', {});
       if (!isProduction) {
-        console.log(`Set next daily check to: ${tomorrow.toISOString()}`);
+        console.log('Initialized chart generation tracker');
       }
     }
 
@@ -134,7 +134,7 @@ export async function execute(client: CustomClient): Promise<void> {
                       );
                     }
                     messageUpdated = true;
-                  } catch {}
+                  } catch { }
                 }
 
                 if (!messageUpdated) {
@@ -200,7 +200,7 @@ export async function execute(client: CustomClient): Promise<void> {
                           `🔊 Updated banned server voice channel in ${guild.name}: ${newName}`
                         );
                       }
-                    } catch {}
+                    } catch { }
                   }
                 }
               },
@@ -281,7 +281,7 @@ export async function execute(client: CustomClient): Promise<void> {
                     );
                   }
                   messageUpdated = true;
-                } catch {}
+                } catch { }
               }
 
               if (!messageUpdated) {
@@ -359,7 +359,7 @@ export async function execute(client: CustomClient): Promise<void> {
                         `🔊 Updated player count channel in ${guild.name}: ${newName} (10min cycle)`
                       );
                     }
-                  } catch {}
+                  } catch { }
                 }
               }
             },
@@ -395,16 +395,17 @@ export async function execute(client: CustomClient): Promise<void> {
 
   async function runDailyChartGeneration() {
     try {
-      const nextCheck = (await client.maxPlayers.get('next')) as number;
-      if (!nextCheck || Date.now() < nextCheck) return;
-
       if (!isProduction) {
-        console.log('Starting daily chart generation...');
+        console.log('Checking for daily chart generation...');
       }
 
-      await client.maxPlayers.set('next', nextCheck + 86400000);
+      const chartGenerationTracker =
+        ((await client.maxPlayers.get('chartGeneration')) as {
+          [guildId: string]: { lastGenerated: number; timezone: string };
+        }) || {};
 
       let chartsGenerated = 0;
+      const now = Date.now();
 
       for (const guild of client.guilds.cache.values()) {
         try {
@@ -416,6 +417,17 @@ export async function execute(client: CustomClient): Promise<void> {
             continue;
 
           const { interval, servers } = guildConfig;
+          const userTimezone = interval.chartTimezone || 'UTC';
+
+          // Check if it's time to generate a chart for this guild's timezone
+          const guildTracker = chartGenerationTracker[guild.id];
+          const lastGenerated = guildTracker?.lastGenerated || 0;
+          const nextMidnight = getMidnightInTimezone(userTimezone).getTime();
+
+          // Only generate if we haven't generated for this timezone's day yet
+          if (now < nextMidnight || lastGenerated >= nextMidnight) {
+            continue;
+          }
 
           const activeServer = servers.find(
             s => s.id === interval.activeServerId
@@ -451,14 +463,13 @@ export async function execute(client: CustomClient): Promise<void> {
             }
           }
 
-          // Create UTC midnight timestamp for the current day
-          const now = new Date();
-          const utcMidnight = new Date(now);
-          utcMidnight.setUTCHours(0, 0, 0, 0);
+          // Create midnight timestamp for the current day in user's timezone
+          const midnightTimestamp =
+            getMidnightInTimezone(userTimezone).getTime();
 
           const chartDataPoint = {
             value: chartValue,
-            date: utcMidnight.getTime(),
+            date: midnightTimestamp,
           };
 
           data.days.push(chartDataPoint);
@@ -509,10 +520,16 @@ export async function execute(client: CustomClient): Promise<void> {
                 data.msg = msg.id;
                 await client.maxPlayers.set(serverDataKey, data);
 
+                // Update tracking
+                chartGenerationTracker[guild.id] = {
+                  lastGenerated: now,
+                  timezone: userTimezone,
+                };
+
                 chartsGenerated++;
                 if (!isProduction) {
                   console.log(
-                    `Chart sent to ${guild.name} for ${activeServer.name} (value: ${chartValue})`
+                    `Chart sent to ${guild.name} for ${activeServer.name} (value: ${chartValue}) in timezone ${userTimezone}`
                   );
                 }
               } catch (chartError) {
@@ -523,6 +540,25 @@ export async function execute(client: CustomClient): Promise<void> {
               }
             }
           }
+
+          // Reset daily counter for this guild
+          setTimeout(async () => {
+            try {
+              const data = await client.maxPlayers.get(serverDataKey);
+              if (data) {
+                data.maxPlayersToday = 0;
+                await client.maxPlayers.set(serverDataKey, data);
+                if (!isProduction) {
+                  console.log(`Reset daily player count for ${guild.name}`);
+                }
+              }
+            } catch (error) {
+              console.error(
+                `Error resetting daily data for guild ${guild.name}:`,
+                error
+              );
+            }
+          }, 120000);
         } catch (error) {
           console.error(
             `Error generating chart for guild ${guild.name}:`,
@@ -531,34 +567,12 @@ export async function execute(client: CustomClient): Promise<void> {
         }
       }
 
+      // Update the tracking data
+      await client.maxPlayers.set('chartGeneration', chartGenerationTracker);
+
       if (isProduction && chartsGenerated > 0) {
         console.log(`Generated ${chartsGenerated} daily charts`);
       }
-
-      setTimeout(async () => {
-        for (const guild of client.guilds.cache.values()) {
-          try {
-            const guildConfig = client.guildConfigs.get(guild.id);
-            if (!guildConfig?.interval?.activeServerId) continue;
-
-            const activeServerId = guildConfig.interval.activeServerId;
-            const serverDataKey = getServerDataKey(guild.id, activeServerId);
-            const data = await client.maxPlayers.get(serverDataKey);
-            if (!data) continue;
-
-            data.maxPlayersToday = 0;
-            await client.maxPlayers.set(serverDataKey, data);
-          } catch (error) {
-            console.error(
-              `Error resetting daily data for guild ${guild.name}:`,
-              error
-            );
-          }
-        }
-        if (!isProduction) {
-          console.log('Reset daily player counts for new day');
-        }
-      }, 120000);
     } catch (error) {
       console.error('Error in daily chart generation:', error);
     }

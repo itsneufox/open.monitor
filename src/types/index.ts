@@ -29,6 +29,7 @@ export interface IntervalConfig {
   dataLossNotificationSent?: boolean;
   preferredLanguage?: 'en' | 'pt' | 'es';
   lastVoiceUpdate?: number;
+  chartTimezone?: string; // IANA timezone identifier (e.g., 'America/New_York', 'Europe/London')
 }
 
 export interface PlayerCountResult {

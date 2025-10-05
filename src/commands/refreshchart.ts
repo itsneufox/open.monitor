@@ -8,6 +8,7 @@ import {
 import { CustomClient, GuildConfig } from '../types';
 import { getChart, getRoleColor, getPlayerCount } from '../utils';
 import { getServerDataKey } from '../types';
+import { getMidnightInTimezone } from '../utils/timezoneUtils';
 
 export const data = new SlashCommandBuilder()
   .setName('refreshchart')
@@ -212,14 +213,16 @@ async function generateChartForGuild(
 
     const currentValue = currentInfo.isOnline ? currentInfo.playerCount : 0;
 
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-    const todayTimestamp = today.getTime();
+    const userTimezone = interval.chartTimezone || 'UTC';
+    const todayTimestamp = getMidnightInTimezone(userTimezone).getTime();
 
     const todayIndex = data.days.findIndex(day => {
       const dayDate = new Date(day.date);
-      dayDate.setUTCHours(0, 0, 0, 0);
-      return dayDate.getTime() === todayTimestamp;
+      const dayMidnight = getMidnightInTimezone(
+        userTimezone,
+        dayDate
+      ).getTime();
+      return dayMidnight === todayTimestamp;
     });
 
     if (todayIndex !== -1) {
