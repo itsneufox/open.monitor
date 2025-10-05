@@ -202,14 +202,25 @@ export async function getStatus(
               score: player.score,
               ping: player.ping,
             }));
+          } else {
+            // Detailed query returned 0 players, try basic query
+            const basicPlayers = await sampQuery.getPlayers(server, guildId);
+            players = basicPlayers.map(player => ({
+              name: player.name,
+              score: player.score,
+            }));
           }
         } catch {
-          // Fallback to basic query
-          const basicPlayers = await sampQuery.getPlayers(server, guildId);
-          players = basicPlayers.map(player => ({
-            name: player.name,
-            score: player.score,
-          }));
+          // Fallback to basic query on error
+          try {
+            const basicPlayers = await sampQuery.getPlayers(server, guildId);
+            players = basicPlayers.map(player => ({
+              name: player.name,
+              score: player.score,
+            }));
+          } catch {
+            // Both queries failed, skip player list
+          }
         }
 
         if (players.length > 0) {
