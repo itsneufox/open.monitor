@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force deploy even if there are no new commits'
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   deploy:
@@ -39,6 +45,12 @@ jobs:
 
     - name: Check for changes
       run: |
+        if [ "${{ github.event.inputs.force }}" = "true" ]; then
+          echo "🚨 Force flag detected. Bypassing change checks and proceeding with deployment."
+          echo "SHOULD_DEPLOY=true" >> $GITHUB_ENV
+          exit 0
+        fi
+
         echo "Checking for changes since last production deployment..."
         
         # Get the last production tag (not nightly)
