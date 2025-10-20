@@ -23,15 +23,21 @@ interface IPQueryData {
 class SecurityValidator {
   private static ipQueryLimits = new Map<string, IPQueryData>();
 
+  // Hardcoded bans - these will block any server using these IPs/domains on ANY port
+  // Format: IP or domain without port (e.g., "149.56.45.135" blocks "149.56.45.135:7777", "149.56.45.135:7778", etc.)
   private static readonly HARDCODED_BANS = new Map<string, string>([
-    ['s1.gta-mp.cz:7777', 'Permanently banned for severe ToS violations'],
-    ['s2.gta-mp.cz:7777', 'Permanently banned for severe ToS violations'],
-    ['s3.gta-mp.cz:7777', 'Permanently banned for severe ToS violations'],
-    ['s4.gta-mp.cz:7777', 'Permanently banned for severe ToS violations'],
-    ['178.32.234.16:7777', 'Permanently banned for severe ToS violations'],
-    ['178.63.13.150:7777', 'Permanently banned for severe ToS violations'],
-    ['178.32.234.17:7777', 'Permanently banned for severe ToS violations'],
-    ['178.32.234.18:7777', 'Permanently banned for severe ToS violations'],
+    ['s1.gta-mp.cz', 'Permanently banned for severe ToS violations'],
+    ['s2.gta-mp.cz', 'Permanently banned for severe ToS violations'],
+    ['s3.gta-mp.cz', 'Permanently banned for severe ToS violations'],
+    ['s4.gta-mp.cz', 'Permanently banned for severe ToS violations'],
+    ['178.32.234.16', 'Permanently banned for severe ToS violations'],
+    ['178.63.13.150', 'Permanently banned for severe ToS violations'],
+    ['178.32.234.17', 'Permanently banned for severe ToS violations'],
+    ['178.32.234.18', 'Permanently banned for severe ToS violations'],
+    ['tws.thatwarserver.com', 'Permanently banned for severe ToS violations'],
+    ['thatwarserver.com', 'Permanently banned for severe ToS violations'],
+    ['149.56.45.135', 'Permanently banned for severe ToS violations'],
+    ['104.131.210.159', 'Permanently banned for severe ToS violations'],
   ]);
 
   private static readonly LIMITS = {
