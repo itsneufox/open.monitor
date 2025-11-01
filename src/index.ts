@@ -209,9 +209,13 @@ setInterval(() => {
   }
 }, 3600000);
 
-process.on('SIGINT', async () => {
-  console.log('\nShutting down gracefully...');
+async function gracefulShutdown(signal: string) {
+  console.log(`\nReceived ${signal}, shutting down gracefully...`);
   try {
+    // Save shutdown timestamp for downtime tracking
+    await client.maxPlayers.set('bot_last_shutdown', Date.now());
+    console.log('Saved shutdown timestamp');
+
     await client.destroy();
     console.log('Client destroyed successfully');
     process.exit(0);
@@ -219,7 +223,10 @@ process.on('SIGINT', async () => {
     console.error('Error during shutdown:', error);
     process.exit(1);
   }
-});
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
@@ -230,13 +237,20 @@ process.on('unhandledRejection', (reason, promise) => {
   });
 });
 
-process.on('uncaughtException', error => {
+process.on('uncaughtException', async error => {
   console.error('Uncaught Exception:', error);
 
   WebhookLogger.critical({
     title: 'Uncaught Exception',
     description: `\`\`\`${error.stack?.substring(0, 1900) || error.message}\`\`\``,
   });
+
+  // Save shutdown timestamp before crash
+  try {
+    await client.maxPlayers.set('bot_last_shutdown', Date.now());
+  } catch {
+    // Ignore errors during emergency shutdown
+  }
 
   process.exit(1);
 });

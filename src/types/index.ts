@@ -55,6 +55,7 @@ export interface ChartData {
 export interface UptimeStats {
   uptime: number;
   downtime: number;
+  lastCheckTime?: number; // Timestamp of last uptime check (to detect bot downtime gaps)
 }
 
 export interface GuildConfig {

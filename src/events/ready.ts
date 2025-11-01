@@ -129,6 +129,93 @@ export async function execute(client: CustomClient): Promise<void> {
       }
     }
 
+    // Check bot downtime
+    const currentTime = Date.now();
+    const lastBotShutdown = (await client.maxPlayers.get(
+      'bot_last_shutdown'
+    )) as number | undefined;
+    const lastBotStartup = (await client.maxPlayers.get('bot_last_startup')) as
+      | number
+      | undefined;
+    let botDowntimeMs = 0;
+    let botDowntimeStr: string | undefined;
+
+    if (lastBotShutdown) {
+      // We have a graceful shutdown timestamp - use it (most accurate)
+      botDowntimeMs = currentTime - lastBotShutdown;
+      const downtimeMinutes = Math.floor(botDowntimeMs / 60000);
+      const downtimeSeconds = Math.floor((botDowntimeMs % 60000) / 1000);
+
+      if (downtimeMinutes >= 60) {
+        const hours = Math.floor(downtimeMinutes / 60);
+        const mins = downtimeMinutes % 60;
+        botDowntimeStr = `${hours}h ${mins}m`;
+      } else if (downtimeMinutes > 0) {
+        botDowntimeStr = `${downtimeMinutes}m ${downtimeSeconds}s`;
+      } else {
+        botDowntimeStr = `${downtimeSeconds}s`;
+      }
+
+      if (!isProduction) {
+        console.log(`Bot was down for: ${botDowntimeStr}`);
+      }
+    } else {
+      // No graceful shutdown timestamp - check server monitoring data for most recent check
+      let mostRecentCheckTime = 0;
+
+      for (const guild of client.guilds.cache.values()) {
+        const guildConfig = client.guildConfigs.get(guild.id);
+        if (!guildConfig?.interval?.activeServerId) continue;
+
+        const activeServerId = guildConfig.interval.activeServerId;
+        const serverDataKey = getServerDataKey(guild.id, activeServerId);
+        const uptimeStats = await client.uptimes.get(serverDataKey);
+
+        if (
+          uptimeStats?.lastCheckTime &&
+          uptimeStats.lastCheckTime > mostRecentCheckTime
+        ) {
+          mostRecentCheckTime = uptimeStats.lastCheckTime;
+        }
+      }
+
+      // Use the most recent check time from any server (more accurate than bot startup)
+      const timestampToUse = mostRecentCheckTime || lastBotStartup;
+
+      if (timestampToUse) {
+        botDowntimeMs = currentTime - timestampToUse;
+        const downtimeMinutes = Math.floor(botDowntimeMs / 60000);
+        const downtimeSeconds = Math.floor((botDowntimeMs % 60000) / 1000);
+
+        if (downtimeMinutes >= 60) {
+          const hours = Math.floor(downtimeMinutes / 60);
+          const mins = downtimeMinutes % 60;
+          botDowntimeStr = `${hours}h ${mins}m (unexpected shutdown)`;
+        } else if (downtimeMinutes > 0) {
+          botDowntimeStr = `${downtimeMinutes}m ${downtimeSeconds}s (unexpected shutdown)`;
+        } else if (downtimeSeconds > 30) {
+          // Only show if > 30s to avoid showing quick restarts
+          botDowntimeStr = `${downtimeSeconds}s (unexpected shutdown)`;
+        }
+
+        if (!isProduction) {
+          const source = mostRecentCheckTime
+            ? 'server monitoring data'
+            : 'last startup time';
+          console.log(
+            `Bot was down for: ${botDowntimeStr || 'less than 30s'} (estimated from ${source})`
+          );
+        }
+      }
+    }
+
+    // Save current startup time for next restart
+    await client.maxPlayers.set('bot_last_startup', currentTime);
+    // Clear shutdown timestamp after using it
+    if (lastBotShutdown) {
+      await client.maxPlayers.delete('bot_last_shutdown');
+    }
+
     // Log bot startup to webhook with detailed info
     const { WebhookLogger } = await import('../utils/webhookLogger');
     const fields: Array<{ name: string; value: string; inline?: boolean }> = [
@@ -140,6 +227,15 @@ export async function execute(client: CustomClient): Promise<void> {
         inline: true,
       },
     ];
+
+    // Add bot downtime if it exists
+    if (botDowntimeStr) {
+      fields.push({
+        name: '⏱️ Bot Downtime',
+        value: botDowntimeStr,
+        inline: true,
+      });
+    }
 
     // Add player stats if we checked any servers
     if (checkedServers > 0) {
@@ -395,11 +491,47 @@ export async function execute(client: CustomClient): Promise<void> {
         chartData.maxPlayers = info.maxPlayers;
         await client.maxPlayers.set(serverDataKey, chartData);
 
-        if (info.isOnline) {
-          onlineStats.uptime++;
+        // Check if there was a significant gap since last check (bot was down)
+        // Only count this check if the gap is reasonable (< 5 minutes)
+        const currentTime = Date.now();
+        const lastCheck = onlineStats.lastCheckTime || 0;
+        const timeSinceLastCheck = currentTime - lastCheck;
+        const maxAcceptableGap = 300000; // 5 minutes
+        const hasExistingData =
+          onlineStats.uptime > 0 || onlineStats.downtime > 0;
+
+        // Only increment uptime/downtime if:
+        // 1. This is truly the first check (no existing data) OR
+        // 2. The gap since last check is reasonable (bot wasn't down)
+        // Skip counting if this is existing data without lastCheckTime (first check after update)
+        if (lastCheck === 0 && !hasExistingData) {
+          // Brand new server - count this first check
+          if (info.isOnline) {
+            onlineStats.uptime++;
+          } else {
+            onlineStats.downtime++;
+          }
+        } else if (lastCheck > 0 && timeSinceLastCheck <= maxAcceptableGap) {
+          // Normal check - gap is reasonable
+          if (info.isOnline) {
+            onlineStats.uptime++;
+          } else {
+            onlineStats.downtime++;
+          }
         } else {
-          onlineStats.downtime++;
+          // Bot was down for a significant period - skip counting this as server downtime
+          if (!isProduction) {
+            const reason =
+              lastCheck === 0
+                ? 'first check after bot update with existing data'
+                : `bot downtime gap of ${Math.round(timeSinceLastCheck / 1000)}s`;
+            console.log(
+              `Skipping uptime/downtime count for ${activeServer.name} in ${guild.name} - ${reason}`
+            );
+          }
         }
+
+        onlineStats.lastCheckTime = currentTime;
         await client.uptimes.set(serverDataKey, onlineStats);
 
         if (statusUpdateDue && interval.statusChannel) {
