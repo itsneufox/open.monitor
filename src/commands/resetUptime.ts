@@ -9,7 +9,13 @@ import { CustomClient, getServerDataKey } from '../types';
 export const data = new SlashCommandBuilder()
   .setName('resetuptime')
   .setDescription(
-    'Reset uptime/downtime statistics for all servers (Owner only)'
+    'Reset uptime/downtime statistics for a specific guild (Owner only)'
+  )
+  .addStringOption(option =>
+    option
+      .setName('guildid')
+      .setDescription('The guild ID to reset uptime data for')
+      .setRequired(true)
   )
   .addBooleanOption(option =>
     option
@@ -31,6 +37,7 @@ export async function execute(
     return;
   }
 
+  const guildId = interaction.options.getString('guildid', true);
   const confirm = interaction.options.getBoolean('confirm', true);
 
   if (!confirm) {
@@ -45,7 +52,16 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    const servers = (await client.servers.get(interaction.guildId!)) || [];
+    // Verify guild exists
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) {
+      await interaction.editReply({
+        content: `❌ Guild not found with ID: \`${guildId}\`\n\nMake sure the bot is in that guild.`,
+      });
+      return;
+    }
+
+    const servers = (await client.servers.get(guildId)) || [];
 
     if (servers.length === 0) {
       await interaction.editReply({
@@ -59,7 +75,7 @@ export async function execute(
 
     for (const server of servers) {
       try {
-        const serverDataKey = getServerDataKey(interaction.guildId!, server.id);
+        const serverDataKey = getServerDataKey(guildId, server.id);
 
         // Reset uptime stats
         await client.uptimes.set(serverDataKey, {
@@ -99,7 +115,7 @@ export async function execute(
         }
       )
       .setFooter({
-        text: 'All servers will start tracking uptime from now.',
+        text: `Guild: ${guild.name} (${guildId}) • All servers will start tracking uptime from now.`,
       })
       .setTimestamp();
 
@@ -114,7 +130,7 @@ export async function execute(
     await interaction.editReply({ embeds: [embed] });
 
     console.log(
-      `[ResetUptime] ${interaction.user.tag} reset uptime for ${resetCount} servers in guild ${interaction.guild?.name}`
+      `[ResetUptime] ${interaction.user.tag} reset uptime for ${resetCount} servers in guild ${guild.name} (${guildId})`
     );
   } catch (error) {
     console.error('Reset uptime command error:', error);
