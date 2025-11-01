@@ -305,11 +305,13 @@ export async function execute(
       let totalChartEntries = 0;
       let totalUptimeEntries = 0;
 
-      for (const [, config] of client.guildConfigs.entries()) {
+      for (const [guildId, config] of client.guildConfigs.entries()) {
         for (const server of config.servers) {
           try {
-            const chartData = await client.maxPlayers.get(server.id);
-            const uptimeData = await client.uptimes.get(server.id);
+            const { getServerDataKey } = await import('../types');
+            const serverDataKey = getServerDataKey(guildId, server.id);
+            const chartData = await client.maxPlayers.get(serverDataKey);
+            const uptimeData = await client.uptimes.get(serverDataKey);
 
             if (chartData?.days) totalChartEntries += chartData.days.length;
             if (uptimeData) totalUptimeEntries++;

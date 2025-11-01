@@ -422,7 +422,8 @@ async function performGuildUpdate(
     throw new Error('Guild not found');
   }
 
-  let onlineStats = await client.uptimes.get(activeServer.id);
+  const serverDataKey = getServerDataKey(guildId, activeServer.id);
+  let onlineStats = await client.uptimes.get(serverDataKey);
   if (!onlineStats) {
     onlineStats = { uptime: 0, downtime: 0 };
   }
@@ -457,7 +458,6 @@ async function performGuildUpdate(
   } else {
     onlineStats.downtime++;
   }
-  const serverDataKey = getServerDataKey(guildId, activeServer.id);
   await client.uptimes.set(serverDataKey, onlineStats);
 
   if (interval.statusChannel) {
