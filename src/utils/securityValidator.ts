@@ -43,8 +43,8 @@ class SecurityValidator {
   ]);
 
   private static readonly LIMITS = {
-    MAX_QUERIES_PER_HOUR: 200,
-    MAX_GUILDS_PER_IP: 15,
+    MAX_QUERIES_PER_HOUR: 600,
+    MAX_GUILDS_PER_IP: 5,
     MIN_MONITORING_INTERVAL: 0,
     MIN_USER_INTERVAL: 500,
     MAX_FAILURES_BEFORE_BAN: 15,
