@@ -39,8 +39,8 @@ Discord bot for monitoring SA-MP and open.mp servers.
 
 ## Updates
 
-- Status embeds: Every 5 minutes
-- Voice channels: Every 10 minutes  
+- Status embeds: Every 2 minutes
+- Voice channels: Every 2 minutes  
 - Charts: Daily at midnight
 
 ## Bot Permissions

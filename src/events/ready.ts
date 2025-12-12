@@ -1,5 +1,11 @@
 import { Events, TextChannel, VoiceChannel, ChannelType } from 'discord.js';
-import { getChart, getStatus, getPlayerCount, getRoleColor } from '../utils';
+import {
+  getChart,
+  getStatus,
+  getPlayerCount,
+  getRoleColor,
+  InputValidator,
+} from '../utils';
 import { CustomClient, getServerDataKey } from '../types';
 
 export const name = Events.ClientReady;
@@ -231,7 +237,7 @@ export async function execute(client: CustomClient): Promise<void> {
     // Add bot downtime if it exists
     if (botDowntimeStr) {
       fields.push({
-        name: '⏱️ Bot Downtime',
+        name: 'Bot Downtime',
         value: botDowntimeStr,
         inline: true,
       });
@@ -256,7 +262,7 @@ export async function execute(client: CustomClient): Promise<void> {
     // Add banned servers count
     if (bannedServers > 0) {
       fields.push({
-        name: '🚫 Banned Servers',
+        name: 'Banned Servers',
         value: `${bannedServers}`,
         inline: true,
       });
@@ -265,7 +271,7 @@ export async function execute(client: CustomClient): Promise<void> {
     // Add theme statistics
     fields.push({
       name: 'Theme Usage',
-      value: `📋 Classic: ${classicTheme}\n📊 Detailed: ${detailedTheme}`,
+      value: `Classic: ${classicTheme}\nDetailed: ${detailedTheme}`,
       inline: true,
     });
 
@@ -286,6 +292,7 @@ export async function execute(client: CustomClient): Promise<void> {
 
         const { interval, servers } = guildConfig;
         const now = Date.now();
+        const voiceStyle = interval.voiceChannelStyle || 'text';
 
         if (!interval.activeServerId) continue;
 
@@ -302,7 +309,7 @@ export async function execute(client: CustomClient): Promise<void> {
         const statusUpdateDue = now >= (interval.next || 0);
 
         const lastVoiceUpdate = interval.lastVoiceUpdate || 0;
-        const voiceUpdateDue = now - lastVoiceUpdate >= 600000;
+        const voiceUpdateDue = now - lastVoiceUpdate >= 120000;
 
         if (!statusUpdateDue && !voiceUpdateDue) continue;
 
@@ -341,7 +348,7 @@ export async function execute(client: CustomClient): Promise<void> {
                     await existingMsg.edit({ embeds: [serverEmbed] });
                     if (!isProduction) {
                       console.log(
-                        `🔄 Updated banned server status in ${guild.name}`
+                        `Updated banned server status in ${guild.name}`
                       );
                     }
                     messageUpdated = true;
@@ -358,7 +365,7 @@ export async function execute(client: CustomClient): Promise<void> {
                     interval.statusMessage = newMsg.id;
                     if (!isProduction) {
                       console.log(
-                        `✉️  Created new banned server status in ${guild.name}`
+                        `Created new banned server status in ${guild.name}`
                       );
                     }
                   } catch (sendError) {
@@ -376,7 +383,7 @@ export async function execute(client: CustomClient): Promise<void> {
               );
             }
 
-            interval.next = now + 300000;
+            interval.next = now + 120000;
           }
 
           if (voiceUpdateDue && interval.playerCountChannel) {
@@ -395,8 +402,8 @@ export async function execute(client: CustomClient): Promise<void> {
                   const banReason = banStatus.reason || 'Server is banned';
                   const newName =
                     banReason.length > 90
-                      ? `🚫 ${banReason.substring(0, 87)}...`
-                      : `🚫 ${banReason}`;
+                      ? `Banned ${banReason.substring(0, 84)}...`
+                      : `Banned ${banReason}`;
 
                   if (channel.name !== newName) {
                     try {
@@ -410,7 +417,7 @@ export async function execute(client: CustomClient): Promise<void> {
 
                       if (!isProduction) {
                         console.log(
-                          `🔊 Updated banned server voice channel in ${guild.name}: ${newName}`
+                          `Updated banned server voice channel in ${guild.name}: ${newName}`
                         );
                       }
                     } catch {}
@@ -437,7 +444,7 @@ export async function execute(client: CustomClient): Promise<void> {
                   serverIpChannel.type === ChannelType.GuildVoice
                 ) {
                   const channel = serverIpChannel as VoiceChannel;
-                  const newName = '🚫 Server Banned';
+                  const newName = 'Server Banned';
 
                   if (channel.name !== newName) {
                     try {
@@ -445,7 +452,7 @@ export async function execute(client: CustomClient): Promise<void> {
 
                       if (!isProduction) {
                         console.log(
-                          `🔊 Updated banned server IP channel in ${guild.name}: ${newName}`
+                          `Updated banned server IP channel in ${guild.name}: ${newName}`
                         );
                       }
                     } catch {}
@@ -492,11 +499,11 @@ export async function execute(client: CustomClient): Promise<void> {
         await client.maxPlayers.set(serverDataKey, chartData);
 
         // Check if there was a significant gap since last check (bot was down)
-        // Only count this check if the gap is reasonable (< 5 minutes)
+        // Only count this check if the gap is reasonable (< ~3 minutes)
         const currentTime = Date.now();
         const lastCheck = onlineStats.lastCheckTime || 0;
         const timeSinceLastCheck = currentTime - lastCheck;
-        const maxAcceptableGap = 300000; // 5 minutes
+        const maxAcceptableGap = 180000; // ~3 minutes
         const hasExistingData =
           onlineStats.uptime > 0 || onlineStats.downtime > 0;
 
@@ -563,7 +570,7 @@ export async function execute(client: CustomClient): Promise<void> {
                   await existingMsg.edit({ embeds: [serverEmbed] });
                   if (!isProduction) {
                     console.log(
-                      `🔄 Updated status message in ${guild.name} (5min cycle)`
+                      `Updated status message in ${guild.name} (2min cycle)`
                     );
                   }
                   messageUpdated = true;
@@ -579,9 +586,7 @@ export async function execute(client: CustomClient): Promise<void> {
                   });
                   interval.statusMessage = newMsg.id;
                   if (!isProduction) {
-                    console.log(
-                      `✉️  Created new status message in ${guild.name}`
-                    );
+                    console.log(`Created new status message in ${guild.name}`);
                   }
                 } catch (sendError) {
                   console.error(`Failed to send status message:`, sendError);
@@ -595,7 +600,7 @@ export async function execute(client: CustomClient): Promise<void> {
             );
           }
 
-          interval.next = now + 300000;
+          interval.next = now + 120000;
         }
 
         if (voiceUpdateDue && interval.playerCountChannel) {
@@ -622,14 +627,16 @@ export async function execute(client: CustomClient): Promise<void> {
                 let newName: string;
 
                 if (info.isOnline) {
-                  newName = `👥 ${info.playerCount}/${info.maxPlayers}`;
+                  newName =
+                    voiceStyle === 'emoji'
+                      ? `👥 ${info.playerCount}/${info.maxPlayers}`
+                      : `Players ${info.playerCount}/${info.maxPlayers}`;
                 } else if (info.error) {
-                  // Truncate to 100 chars (Discord limit) if needed
-                  const errorMsg =
+                  const baseError =
                     info.error.length > 90
-                      ? `🚫 ${info.error.substring(0, 87)}...`
-                      : `🚫 ${info.error}`;
-                  newName = errorMsg;
+                      ? `${info.error.substring(0, 84)}...`
+                      : info.error;
+                  newName = `Error ${baseError}`;
                 } else {
                   newName = '❌ Server Offline';
                 }
@@ -646,7 +653,7 @@ export async function execute(client: CustomClient): Promise<void> {
 
                     if (!isProduction) {
                       console.log(
-                        `🔊 Updated player count channel in ${guild.name}: ${newName} (10min cycle)`
+                        `Updated player count channel in ${guild.name}: ${newName} (2min cycle)`
                       );
                     }
                   } catch {}
@@ -657,6 +664,46 @@ export async function execute(client: CustomClient): Promise<void> {
           );
 
           interval.lastVoiceUpdate = now;
+        }
+
+        if (voiceUpdateDue && interval.serverIpChannel) {
+          await client.rateLimitManager.queueChannelUpdate(
+            interval.serverIpChannel,
+            async () => {
+              const serverIpChannel = await client.channels
+                .fetch(interval.serverIpChannel!)
+                .catch(() => null);
+
+              if (
+                serverIpChannel &&
+                serverIpChannel.type === ChannelType.GuildVoice
+              ) {
+                const channel = serverIpChannel as VoiceChannel;
+                const desiredName =
+                  voiceStyle === 'emoji'
+                    ? `🔗 ${activeServer.ip}:${activeServer.port}`
+                    : `IP: ${activeServer.ip}:${activeServer.port}`;
+                const validation =
+                  InputValidator.validateChannelName(desiredName);
+                const newName =
+                  validation.valid && typeof validation.sanitized === 'string'
+                    ? validation.sanitized
+                    : desiredName;
+
+                if (channel.name !== newName) {
+                  try {
+                    await channel.setName(newName);
+                    if (!isProduction) {
+                      console.log(
+                        `Updated server IP channel in ${guild.name}: ${newName}`
+                      );
+                    }
+                  } catch {}
+                }
+              }
+            },
+            'low'
+          );
         }
 
         await client.intervals.set(guild.id, interval);

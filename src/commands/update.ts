@@ -5,15 +5,16 @@ import {
   MessageFlags,
   ChannelType,
   VoiceChannel,
+  TextChannel,
 } from 'discord.js';
-import { CustomClient, GuildConfig } from '../types';
-import { getPlayerCount, getStatus, getRoleColor } from '../utils';
-import { getServerDataKey } from '../types';
+import { CustomClient, GuildConfig, getServerDataKey } from '../types';
+import { getPlayerCount, getStatus, getRoleColor, getChart } from '../utils';
 import { InputValidator } from '../utils/inputValidator';
 
 export const data = new SlashCommandBuilder()
-  .setName('forceupdate')
-  .setDescription('Force an immediate status update (Owner only)')
+  .setName('update')
+  .setDescription('Force immediate updates (Owner only)')
+  .setDefaultMemberPermissions(null) // Hidden from non-admins
   .addSubcommand(subcommand =>
     subcommand
       .setName('status')
@@ -47,7 +48,28 @@ export const data = new SlashCommandBuilder()
           .setDescription('Update all guilds with voice channels')
           .setRequired(false)
       )
+  )
+  .addSubcommand(subcommand =>
+    subcommand
+      .setName('chart')
+      .setDescription('Force refresh daily chart for active server')
+      .addStringOption(option =>
+        option
+          .setName('guild')
+          .setDescription(
+            'Guild ID to refresh chart for (leave empty for current guild)'
+          )
+          .setRequired(false)
+      )
+      .addBooleanOption(option =>
+        option
+          .setName('all_guilds')
+          .setDescription('Refresh charts for all guilds')
+          .setRequired(false)
+      )
   );
+
+export const guildOnly = '1409643885726138380'; // Owner guild only
 
 export async function execute(
   interaction: ChatInputCommandInteraction,
@@ -68,17 +90,23 @@ export async function execute(
   const allGuilds = interaction.options.getBoolean('all_guilds') || false;
 
   try {
-    if (subcommand === 'status') {
-      await handleStatusUpdate(interaction, client, targetGuildId, allGuilds);
-    } else if (subcommand === 'voices') {
-      await handleVoiceUpdate(interaction, client, targetGuildId, allGuilds);
+    switch (subcommand) {
+      case 'status':
+        await handleStatusUpdate(interaction, client, targetGuildId, allGuilds);
+        break;
+      case 'voices':
+        await handleVoiceUpdate(interaction, client, targetGuildId, allGuilds);
+        break;
+      case 'chart':
+        await handleChartUpdate(interaction, client, targetGuildId, allGuilds);
+        break;
     }
   } catch (error) {
-    console.error('Force update error:', error);
+    console.error('Update command error:', error);
 
     const errorEmbed = new EmbedBuilder()
       .setColor(0xff0000)
-      .setTitle('❌ Force Update Failed')
+      .setTitle('❌ Update Failed')
       .setDescription('An error occurred while forcing the update')
       .addFields({
         name: 'Error',
@@ -118,7 +146,7 @@ async function handleStatusUpdate(
 
     const embed = new EmbedBuilder()
       .setColor(errors.length > 0 ? 0xff9500 : 0x00ff00)
-      .setTitle('🔄 Force Update - All Guilds')
+      .setTitle('Force Update - All Guilds')
       .setDescription(
         `Updated ${updatedGuilds} guild(s) with active monitoring`
       )
@@ -170,7 +198,7 @@ async function handleStatusUpdate(
   const guild = client.guilds.cache.get(guildId);
   const embed = new EmbedBuilder()
     .setColor(0x00ff00)
-    .setTitle('🔄 Status Update Complete')
+    .setTitle('Status Update Complete')
     .setDescription('Status has been updated immediately')
     .addFields(
       {
@@ -194,7 +222,7 @@ async function handleStatusUpdate(
   await interaction.editReply({ embeds: [embed] });
 
   console.log(
-    `Status update completed by ${interaction.user.tag} for guild ${guild?.name || guildId}`
+    `[Update] Status updated by ${interaction.user.tag} for guild ${guild?.name || guildId}`
   );
 }
 
@@ -233,7 +261,7 @@ async function handleVoiceUpdate(
 
     const embed = new EmbedBuilder()
       .setColor(errors.length > 0 ? 0xff9500 : 0x00ff00)
-      .setTitle('🔊 Voice Update - All Guilds')
+      .setTitle('Voice Update - All Guilds')
       .setDescription(
         `Updated ${updatedChannels} voice channel(s) across ${updatedGuilds} guild(s)`
       )
@@ -289,7 +317,7 @@ async function handleVoiceUpdate(
   const guild = client.guilds.cache.get(guildId);
   const embed = new EmbedBuilder()
     .setColor(0x00ff00)
-    .setTitle('🔊 Voice Update Complete')
+    .setTitle('Voice Update Complete')
     .setDescription(`Updated ${channelsUpdated} voice channel(s)`)
     .addFields(
       {
@@ -313,91 +341,124 @@ async function handleVoiceUpdate(
   await interaction.editReply({ embeds: [embed] });
 
   console.log(
-    `Voice update completed by ${interaction.user.tag} for guild ${guild?.name || guildId}`
+    `[Update] Voice channels updated by ${interaction.user.tag} for guild ${guild?.name || guildId}`
   );
 }
 
-async function updateGuildVoiceChannels(
+async function handleChartUpdate(
+  interaction: ChatInputCommandInteraction,
   client: CustomClient,
-  guildId: string,
-  guildConfig: GuildConfig
-): Promise<number> {
-  const { interval, servers } = guildConfig;
-  let channelsUpdated = 0;
+  targetGuildId: string | null,
+  allGuilds: boolean
+): Promise<void> {
+  let chartsGenerated = 0;
+  let errors: string[] = [];
 
-  if (!interval) {
-    throw new Error('Interval configuration not found');
+  if (allGuilds) {
+    for (const [guildId, guildConfig] of client.guildConfigs.entries()) {
+      if (
+        guildConfig.interval?.enabled &&
+        guildConfig.interval.chartChannel &&
+        guildConfig.interval.activeServerId
+      ) {
+        try {
+          await generateChartForGuild(client, guildId, guildConfig);
+          chartsGenerated++;
+        } catch (error) {
+          const guild = client.guilds.cache.get(guildId);
+          errors.push(`${guild?.name || guildId}: ${error}`);
+        }
+      }
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor(errors.length > 0 ? 0xff9500 : 0x00ff00)
+      .setTitle('Chart Refresh - All Guilds')
+      .setDescription(`Generated ${chartsGenerated} chart(s)`)
+      .addFields({
+        name: 'Status',
+        value:
+          errors.length > 0
+            ? `${chartsGenerated} successful, ${errors.length} errors`
+            : 'All charts generated successfully',
+        inline: true,
+      })
+      .setTimestamp();
+
+    if (errors.length > 0 && errors.length <= 5) {
+      embed.addFields({
+        name: 'Errors',
+        value: errors.join('\n'),
+        inline: false,
+      });
+    }
+
+    await interaction.editReply({ embeds: [embed] });
+    return;
   }
 
-  const activeServer = servers.find(
-    (s: { id: string }) => s.id === interval.activeServerId
-  );
-  if (!activeServer) {
-    throw new Error('Active server not found');
+  const guildId = targetGuildId || interaction.guildId!;
+  const guildConfig = client.guildConfigs.get(guildId);
+
+  if (!guildConfig?.interval?.enabled) {
+    await interaction.editReply(
+      `❌ No active monitoring configured for guild ${guildId}.`
+    );
+    return;
   }
+
+  if (!guildConfig.interval.chartChannel) {
+    await interaction.editReply(
+      `❌ No chart channel configured for guild ${guildId}.`
+    );
+    return;
+  }
+
+  if (!guildConfig.interval.activeServerId) {
+    await interaction.editReply(
+      `❌ No active server configured for guild ${guildId}.`
+    );
+    return;
+  }
+
+  await generateChartForGuild(client, guildId, guildConfig);
 
   const guild = client.guilds.cache.get(guildId);
-  if (!guild) {
-    throw new Error('Guild not found');
-  }
+  const activeServer = guildConfig.servers.find(
+    s => s.id === guildConfig.interval!.activeServerId
+  );
 
-  const info = await getPlayerCount(activeServer, guildId, true);
-
-  if (interval.playerCountChannel) {
-    try {
-      const playerCountChannel = await client.channels
-        .fetch(interval.playerCountChannel)
-        .catch(() => null);
-
-      if (
-        playerCountChannel &&
-        playerCountChannel.type === ChannelType.GuildVoice
-      ) {
-        const channel = playerCountChannel as VoiceChannel;
-        const newName = info.isOnline
-          ? `👥 ${info.playerCount}/${info.maxPlayers}`
-          : '❌ Server Offline';
-
-        if (channel.name !== newName) {
-          await channel.setName(newName);
-          channelsUpdated++;
-        }
+  const embed = new EmbedBuilder()
+    .setColor(0x00ff00)
+    .setTitle('Chart Refresh Complete')
+    .setDescription('Chart has been regenerated and posted')
+    .addFields(
+      {
+        name: 'Guild',
+        value: guild?.name || 'Unknown',
+        inline: true,
+      },
+      {
+        name: 'Server',
+        value: activeServer?.name || 'Unknown',
+        inline: true,
+      },
+      {
+        name: 'Channel',
+        value: `<#${guildConfig.interval.chartChannel}>`,
+        inline: true,
       }
-    } catch (error) {
-      console.error('Failed to update player count channel:', error);
-    }
-  }
+    )
+    .setTimestamp();
 
-  if (interval.serverIpChannel) {
-    try {
-      const serverIpChannel = await client.channels
-        .fetch(interval.serverIpChannel)
-        .catch(() => null);
+  await interaction.editReply({ embeds: [embed] });
 
-      if (serverIpChannel && serverIpChannel.type === ChannelType.GuildVoice) {
-        const channel = serverIpChannel as VoiceChannel;
-        const channelNameValidation = InputValidator.validateChannelName(
-          `IP: ${activeServer.ip}:${activeServer.port}`
-        );
-
-        if (
-          channelNameValidation.valid &&
-          typeof channelNameValidation.sanitized === 'string'
-        ) {
-          const newName = channelNameValidation.sanitized;
-          if (channel.name !== newName) {
-            await channel.setName(newName);
-            channelsUpdated++;
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to update server IP channel:', error);
-    }
-  }
-
-  return channelsUpdated;
+  console.log(
+    `[Update] Chart refreshed by ${interaction.user.tag} for guild ${guild?.name || guildId}`
+  );
 }
+
+// Helper functions
 
 async function performGuildUpdate(
   client: CustomClient,
@@ -428,9 +489,7 @@ async function performGuildUpdate(
     onlineStats = { uptime: 0, downtime: 0 };
   }
 
-  let chartData = await client.maxPlayers.get(
-    getServerDataKey(guildId, activeServer.id)
-  );
+  let chartData = await client.maxPlayers.get(serverDataKey);
   if (!chartData) {
     chartData = {
       maxPlayersToday: 0,
@@ -448,10 +507,7 @@ async function performGuildUpdate(
   chartData.name = info.name;
   chartData.maxPlayers = info.maxPlayers;
 
-  await client.maxPlayers.set(
-    getServerDataKey(guildId, activeServer.id),
-    chartData
-  );
+  await client.maxPlayers.set(serverDataKey, chartData);
 
   if (info.isOnline) {
     onlineStats.uptime++;
@@ -497,8 +553,204 @@ async function performGuildUpdate(
     }
   }
 
-  interval.next = Date.now() + 600000;
+  interval.next = Date.now() + 120000;
   await client.intervals.set(guildId, interval);
 
   client.guildConfigs.set(guildId, guildConfig);
+}
+
+async function updateGuildVoiceChannels(
+  client: CustomClient,
+  guildId: string,
+  guildConfig: GuildConfig
+): Promise<number> {
+  const { interval, servers } = guildConfig;
+  let channelsUpdated = 0;
+
+  if (!interval) {
+    throw new Error('Interval configuration not found');
+  }
+  const voiceStyle = interval.voiceChannelStyle || 'text';
+
+  const activeServer = servers.find(
+    (s: { id: string }) => s.id === interval.activeServerId
+  );
+  if (!activeServer) {
+    throw new Error('Active server not found');
+  }
+
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) {
+    throw new Error('Guild not found');
+  }
+
+  const info = await getPlayerCount(activeServer, guildId, true);
+
+  if (interval.playerCountChannel) {
+    try {
+      const playerCountChannel = await client.channels
+        .fetch(interval.playerCountChannel)
+        .catch(() => null);
+
+      if (
+        playerCountChannel &&
+        playerCountChannel.type === ChannelType.GuildVoice
+      ) {
+        const channel = playerCountChannel as VoiceChannel;
+        const newName = info.isOnline
+          ? voiceStyle === 'emoji'
+            ? `👥 ${info.playerCount}/${info.maxPlayers}`
+            : `Players ${info.playerCount}/${info.maxPlayers}`
+          : '❌ Server Offline';
+
+        if (channel.name !== newName) {
+          await channel.setName(newName);
+          channelsUpdated++;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to update player count channel:', error);
+    }
+  }
+
+  if (interval.serverIpChannel) {
+    try {
+      const serverIpChannel = await client.channels
+        .fetch(interval.serverIpChannel)
+        .catch(() => null);
+
+      if (serverIpChannel && serverIpChannel.type === ChannelType.GuildVoice) {
+        const channel = serverIpChannel as VoiceChannel;
+        const desiredName =
+          voiceStyle === 'emoji'
+            ? `🔗 ${activeServer.ip}:${activeServer.port}`
+            : `IP: ${activeServer.ip}:${activeServer.port}`;
+        const channelNameValidation =
+          InputValidator.validateChannelName(desiredName);
+        const newName =
+          channelNameValidation.valid &&
+          typeof channelNameValidation.sanitized === 'string'
+            ? channelNameValidation.sanitized
+            : desiredName;
+
+        if (channel.name !== newName) {
+          await channel.setName(newName);
+          channelsUpdated++;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to update server IP channel:', error);
+    }
+  }
+
+  return channelsUpdated;
+}
+
+async function generateChartForGuild(
+  client: CustomClient,
+  guildId: string,
+  guildConfig: GuildConfig
+): Promise<void> {
+  const { interval, servers } = guildConfig;
+
+  if (!interval?.activeServerId) {
+    throw new Error('No active server configured');
+  }
+
+  if (!interval.chartChannel) {
+    throw new Error('No chart channel configured');
+  }
+
+  const activeServer = servers.find(
+    (s: { id: string }) => s.id === interval?.activeServerId
+  );
+  if (!activeServer) {
+    throw new Error('Active server not found');
+  }
+
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) {
+    throw new Error('Guild not found');
+  }
+
+  const serverDataKey = getServerDataKey(guildId, activeServer.id);
+  const data = await client.maxPlayers.get(serverDataKey);
+
+  if (!data || !data.days || data.days.length < 2) {
+    throw new Error('Insufficient chart data (need at least 2 days)');
+  }
+
+  // For manual refresh, update today's data with current player count
+  try {
+    const currentInfo = await client.rateLimitManager.executeWithRetry(
+      () => getPlayerCount(activeServer, guildId, true),
+      2
+    );
+
+    const currentValue = currentInfo.isOnline ? currentInfo.playerCount : 0;
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const todayTimestamp = today.getTime();
+
+    const todayIndex = data.days.findIndex(day => {
+      const dayDate = new Date(day.date);
+      dayDate.setUTCHours(0, 0, 0, 0);
+      return dayDate.getTime() === todayTimestamp;
+    });
+
+    if (todayIndex !== -1) {
+      data.days[todayIndex]!.value = Math.max(
+        data.days[todayIndex]!.value,
+        currentValue
+      );
+      data.days[todayIndex]!.date = todayTimestamp;
+    } else {
+      data.days.push({
+        value: currentValue,
+        date: todayTimestamp,
+      });
+    }
+
+    if (data.days.length > 30) {
+      data.days = data.days.slice(-30);
+    }
+
+    await client.maxPlayers.set(serverDataKey, data);
+    console.log(
+      `Updated chart data with current player count: ${currentValue}`
+    );
+  } catch (error) {
+    console.log(`Could not get current player count for refresh: ${error}`);
+  }
+
+  const chartChannel = (await client.channels.fetch(
+    interval.chartChannel
+  )) as TextChannel;
+  if (!chartChannel) {
+    throw new Error('Chart channel not found');
+  }
+
+  const color = getRoleColor(guild);
+  const chart = await getChart(data, color);
+
+  if (data.msg) {
+    try {
+      const oldMessage = await chartChannel.messages.fetch(data.msg);
+      await oldMessage.delete();
+      console.log(
+        `Deleted old chart message for ${activeServer.name} in ${guild.name}`
+      );
+    } catch (error) {
+      console.log(`Could not delete old chart message: ${error}`);
+    }
+  }
+
+  const msg = await chartChannel.send({
+    content: `**Daily Chart for ${activeServer.name}** (Refreshed)`,
+    files: [chart],
+  });
+
+  data.msg = msg.id;
+  await client.maxPlayers.set(serverDataKey, data);
 }

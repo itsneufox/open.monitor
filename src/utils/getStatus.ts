@@ -32,7 +32,7 @@ export async function getStatus(
       embed
         .setTitle(statusTitle)
         .setDescription(
-          `**${server.ip}:${server.port}**\n🚫 ${banCheck.reason || 'Server is banned'}`
+          `**${server.ip}:${server.port}**\nBanned: ${banCheck.reason || 'Server is banned'}`
         );
       return embed;
     }
@@ -136,14 +136,8 @@ export async function getStatus(
           const percentage = (uptimeStats.uptime / totalChecks) * 100;
 
           let emoji = '⚪';
-          if (percentage >= 99) {
+          if (percentage >= 95) {
             emoji = '🟢';
-          } else if (percentage >= 96) {
-            emoji = '🟡';
-          } else if (percentage >= 90) {
-            emoji = '🟠';
-          } else {
-            emoji = '🔴';
           }
 
           uptimeDisplay = `${emoji} ${percentage.toFixed(2)}%`;

@@ -22,6 +22,7 @@ export interface IntervalConfig {
   chartChannel?: string;
   serverIpChannel?: string;
   playerCountChannel?: string;
+  voiceChannelStyle?: 'emoji' | 'text';
   enabled: boolean;
   next: number;
   statusMessage: string | null;

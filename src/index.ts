@@ -7,6 +7,7 @@ import KeyvMysql from '@keyv/mysql';
 import { CustomClient } from './types';
 import { RateLimitManager } from './utils/rateLimitManager';
 import { WebhookLogger } from './utils/webhookLogger';
+import { SecurityValidator } from './utils/securityValidator';
 
 config();
 
@@ -29,6 +30,7 @@ const client = new Client({
 }) as CustomClient;
 
 client.rateLimitManager = new RateLimitManager();
+SecurityValidator.setClient(client);
 
 try {
   const mysqlAdapter = new KeyvMysql(process.env.DATABASE_URL!);
@@ -101,8 +103,15 @@ for (const file of commandFiles) {
 
     if ('data' in command && 'execute' in command) {
       client.commands.set(command.data.name, command);
-      commands.push(command.data.toJSON());
-      console.log(`  Loaded command: ${command.data.name}`);
+
+      // Skip guild-specific commands from global registration
+      if (!command.guildOnly) {
+        commands.push(command.data.toJSON());
+      }
+
+      console.log(
+        `  Loaded command: ${command.data.name}${command.guildOnly ? ' (guild-specific)' : ''}`
+      );
     } else {
       console.warn(
         `  Command at ${filePath} is missing required "data" or "execute" property.`
@@ -151,14 +160,42 @@ const rest = new REST().setToken(process.env.TOKEN!);
 
 (async () => {
   try {
+    // Register global commands
     console.log('Started refreshing application (/) commands...');
     const data = (await rest.put(
       Routes.applicationCommands(process.env.CLIENT_ID!),
       { body: commands }
     )) as Array<Record<string, unknown>>;
     console.log(
-      `Successfully reloaded ${data.length} application (/) commands.`
+      `Successfully reloaded ${data.length} global application (/) commands.`
     );
+
+    // Register guild-specific commands
+    const ownerGuildId = '1409643885726138380';
+    const guildCommands: Array<unknown> = [];
+
+    type SlashCommandData = { toJSON: () => unknown };
+    for (const [, command] of client.commands.entries()) {
+      if ('guildOnly' in command && command.guildOnly) {
+        const slashData = command.data as Partial<SlashCommandData>;
+        if (slashData && typeof slashData.toJSON === 'function') {
+          guildCommands.push(slashData.toJSON());
+        }
+      }
+    }
+
+    if (guildCommands.length > 0) {
+      console.log(
+        `Registering ${guildCommands.length} owner-only commands to guild ${ownerGuildId}...`
+      );
+      const guildData = (await rest.put(
+        Routes.applicationGuildCommands(process.env.CLIENT_ID!, ownerGuildId),
+        { body: guildCommands }
+      )) as Array<Record<string, unknown>>;
+      console.log(
+        `Successfully reloaded ${guildData.length} guild-specific commands.`
+      );
+    }
   } catch (error) {
     console.error('Failed to deploy commands:', error);
   }
@@ -180,7 +217,7 @@ client.on('invalidRequestWarning', data => {
 
   if (data.count > 8000) {
     console.error(
-      `⚠️  Approaching invalid request limit! Count: ${data.count}/10000`
+      `Approaching invalid request limit! Count: ${data.count}/10000`
     );
     console.error('Check for permission errors or malformed requests');
 
@@ -201,8 +238,6 @@ client.on('invalidRequestWarning', data => {
 
 setInterval(() => {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { SecurityValidator } = require('./utils/securityValidator');
     SecurityValidator.cleanupOldEntries();
   } catch (error) {
     console.error('Error during rate limit cleanup:', error);
