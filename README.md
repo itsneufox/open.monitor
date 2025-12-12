@@ -27,10 +27,17 @@ Discord bot for monitoring SA-MP and open.mp servers.
 
 ## Commands
 
-- `/server add ip:your.server.com port:7777` - Add your server
-- `/monitor setup status_channel:#status` - Setup monitoring
-- `/chart` - View player activity chart
-- `/players` - See who's online
+- `/manage` – Management panel that includes the **Setup Server** wizard, channel selectors, and monitoring controls.
+- `/status` – Public server status embed with optional fresh query (`fresh:true`).
+- `/players` – Snapshot of who is online right now.
+- `/chart` – 30-day player activity chart (generated from the 2‑minute polling data).
+- `/help` – Ephemeral help center with command drill-downs.
+- `/reportbug` – Sends users to [GitHub issues](https://github.com/itsneufox/open.monitor/issues).
+
+Owner-only:
+- `/update` – Force a status/chart refresh across guilds.
+- `/maintenance` – Clean old data or fix DB entries.
+- `/ban`, `/reboot`, `/debug` – Restricted bot-owner tooling.
 
 ## Requirements
 
