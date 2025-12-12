@@ -55,7 +55,7 @@ export async function checkPermissionOrReply(
       const role = interaction.guild!.roles.cache.get(
         intervalConfig.managementRoleId
       );
-      errorMessage += `You need one of the following to use this command:\n• Administrator permission\n• ${role ? role.toString() : 'The configured management role'}`;
+      errorMessage += `You need one of the following to use this command:\n- Administrator permission\n- ${role ? role.toString() : 'The configured management role'}`;
     }
 
     // Check if interaction is already replied/deferred

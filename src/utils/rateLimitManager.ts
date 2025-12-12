@@ -22,7 +22,7 @@ export class RateLimitManager {
   private lastChannelUpdate = new Map<string, number>();
   private queueStats = new Map<string, QueueStats>();
 
-  private readonly CHANNEL_UPDATE_COOLDOWN = 10 * 60 * 1000; // 10 minutes
+  private readonly CHANNEL_UPDATE_COOLDOWN = 2 * 60 * 1000; // 2 minutes
   private readonly MAX_QUEUE_SIZE = 50; // Prevent memory issues
   private readonly MAX_OPERATION_AGE = 30 * 60 * 1000; // 30 minutes max wait
   private readonly QUEUE_CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
@@ -312,7 +312,7 @@ export class RateLimitManager {
 
   private cleanupQueues(): void {
     const now = Date.now();
-    const emptyQueueThreshold = 10 * 60 * 1000; // Remove empty queues after 10 minutes
+    const emptyQueueThreshold = 2 * 60 * 1000; // Remove empty queues after 2 minutes
 
     for (const [channelId, queue] of this.channelUpdateQueues.entries()) {
       const stats = this.queueStats.get(channelId);

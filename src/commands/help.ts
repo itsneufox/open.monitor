@@ -5,531 +5,264 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ComponentType,
   MessageFlags,
 } from 'discord.js';
 import { CustomClient } from '../types';
 import { getRoleColor, hasManagementPermission } from '../utils';
 
-export const data = new SlashCommandBuilder()
-  .setName('help')
-  .setDescription('Show all available commands and their usage')
-  .addStringOption(option =>
-    option
-      .setName('category')
-      .setDescription('Show commands for a specific category')
-      .setRequired(false)
-      .addChoices(
-        { name: 'Server Management', value: 'server' },
-        { name: 'Monitoring', value: 'monitoring' },
-        { name: 'Data & Charts', value: 'data' },
-        { name: 'Configuration', value: 'config' },
-        { name: 'Utility', value: 'utility' }
-      )
-  )
-  .addStringOption(option =>
-    option
-      .setName('command')
-      .setDescription('Get detailed help for a specific command')
-      .setRequired(false)
-      .addChoices(
-        { name: '/server', value: 'server' },
-        { name: '/monitor', value: 'monitor' },
-        { name: '/chart', value: 'chart' },
-        { name: '/players', value: 'players' },
-        { name: '/role', value: 'role' },
-        { name: '/help', value: 'help' },
-        { name: '/debug', value: 'debug' },
-        { name: '/cleanup', value: 'cleanup' }
-      )
-  );
+type Audience = 'public' | 'management' | 'owner' | 'utility';
 
 interface CommandInfo {
+  key: string;
   name: string;
   description: string;
   usage: string;
   examples: string[];
   permissions: string;
-  category: string;
+  audience: Audience;
 }
+
+const COMMANDS: CommandInfo[] = [
+  {
+    key: 'status',
+    name: '/status',
+    description: 'Show the current status of the active monitored server.',
+    usage: '/status [fresh:true]',
+    examples: ['/status', '/status fresh:true'],
+    permissions: 'Everyone',
+    audience: 'public',
+  },
+  {
+    key: 'players',
+    name: '/players',
+    description: 'Display who is currently online on the active server.',
+    usage: '/players',
+    examples: ['/players'],
+    permissions: 'Everyone',
+    audience: 'public',
+  },
+  {
+    key: 'chart',
+    name: '/chart',
+    description: 'Generate the 30-day player activity chart.',
+    usage: '/chart',
+    examples: ['/chart'],
+    permissions: 'Everyone',
+    audience: 'public',
+  },
+  {
+    key: 'manage',
+    name: '/manage',
+    description: 'Open the management panel to tweak servers and channels.',
+    usage: '/manage',
+    examples: ['/manage'],
+    permissions: 'Management role or Administrator',
+    audience: 'management',
+  },
+  {
+    key: 'update',
+    name: '/update',
+    description: 'Force a status or chart refresh across guilds.',
+    usage: '/update target:status all_guilds:true',
+    examples: ['/update target:status', '/update target:chart all_guilds:true'],
+    permissions: 'Bot Owner',
+    audience: 'owner',
+  },
+  {
+    key: 'maintenance',
+    name: '/maintenance',
+    description: 'Clean old data or fix database entries.',
+    usage: '/maintenance action:cleanup-data',
+    examples: ['/maintenance action:cleanup-data'],
+    permissions: 'Bot Owner',
+    audience: 'owner',
+  },
+  {
+    key: 'ban',
+    name: '/ban',
+    description: 'Manage IP bans for malicious servers.',
+    usage: '/ban action:list',
+    examples: [
+      '/ban action:list',
+      '/ban action:add address:1.1.1.1 reason:"malicious"',
+    ],
+    permissions: 'Bot Owner',
+    audience: 'owner',
+  },
+  {
+    key: 'reboot',
+    name: '/reboot',
+    description: 'Restart the bot process (requires external supervisor).',
+    usage: '/reboot',
+    examples: ['/reboot'],
+    permissions: 'Bot Owner',
+    audience: 'owner',
+  },
+  {
+    key: 'debug',
+    name: '/debug',
+    description: 'Show diagnostics about guilds, servers, and cache.',
+    usage: '/debug',
+    examples: ['/debug'],
+    permissions: 'Bot Owner',
+    audience: 'owner',
+  },
+  {
+    key: 'help',
+    name: '/help',
+    description: 'Display this help center or drill into a command.',
+    usage: '/help command:status',
+    examples: ['/help', '/help command:manage'],
+    permissions: 'Everyone',
+    audience: 'utility',
+  },
+  {
+    key: 'reportbug',
+    name: '/reportbug',
+    description: 'Get the GitHub link to report bugs or suggest features.',
+    usage: '/reportbug',
+    examples: ['/reportbug'],
+    permissions: 'Everyone',
+    audience: 'utility',
+  },
+];
+
+export const data = new SlashCommandBuilder()
+  .setName('help')
+  .setDescription('Overview of public commands and management tools')
+  .addStringOption(option => {
+    option
+      .setName('command')
+      .setDescription('Show detailed help for a specific command')
+      .setRequired(false);
+
+    COMMANDS.forEach(cmd => {
+      option.addChoices({ name: cmd.name, value: cmd.key });
+    });
+
+    return option;
+  });
 
 export async function execute(
   interaction: ChatInputCommandInteraction,
   client: CustomClient
 ): Promise<void> {
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const category = interaction.options.getString('category');
-  const specificCommand = interaction.options.getString('command');
-  const hasManagementPerms = await hasManagementPermission(interaction, client);
   const color = getRoleColor(interaction.guild!);
+  const hasManagementPerms = await hasManagementPermission(interaction, client);
+  const commandKey = interaction.options.getString('command');
 
-  // Define all commands with their information
-  const commands: CommandInfo[] = [
-    {
-      name: '/server add',
-      description: 'Add a new SA:MP/open.mp server to monitor',
-      usage: '/server add ip:<address> [port:<number>] [name:<friendly_name>]',
-      examples: [
-        '/server add ip:127.0.0.1 port:7777',
-        '/server add ip:server.example.com name:"My Server"',
-        '/server add ip:192.168.1.100',
-      ],
-      permissions: 'Management Role or Administrator',
-      category: 'server',
-    },
-    {
-      name: '/server list',
-      description: 'Show all configured servers for this guild',
-      usage: '/server list',
-      examples: ['/server list'],
-      permissions: 'Everyone',
-      category: 'server',
-    },
-    {
-      name: '/server activate',
-      description: 'Set which server to actively monitor',
-      usage: '/server activate server:<server_name_or_id>',
-      examples: [
-        '/server activate server:My Server',
-        '/server activate server:127.0.0.1:7777',
-      ],
-      permissions: 'Management Role or Administrator',
-      category: 'server',
-    },
-    {
-      name: '/server remove',
-      description: 'Remove a server and all its data',
-      usage: '/server remove server:<server_name_or_id> confirm:true',
-      examples: [
-        '/server remove server:My Server confirm:true',
-        '/server remove server:127.0.0.1:7777 confirm:true',
-      ],
-      permissions: 'Management Role or Administrator',
-      category: 'server',
-    },
-    {
-      name: '/server status',
-      description: 'Show current server status and information',
-      usage: '/server status [server:<server>] [fresh:<true/false>]',
-      examples: [
-        '/server status',
-        '/server status fresh:true',
-        '/server status server:My Server fresh:true',
-      ],
-      permissions: 'Everyone',
-      category: 'server',
-    },
-    {
-      name: '/monitor setup',
-      description: 'Quick setup wizard for server monitoring',
-      usage:
-        '/monitor setup status_channel:<channel> [chart_channel:<channel>] [player_count_channel:<channel>] [server_ip_channel:<channel>]',
-      examples: [
-        '/monitor setup status_channel:#server-status',
-        '/monitor setup status_channel:#status chart_channel:#charts player_count_channel:Player Count',
-      ],
-      permissions: 'Management Role or Administrator',
-      category: 'monitoring',
-    },
-    {
-      name: '/monitor enable',
-      description: 'Enable monitoring with current settings',
-      usage: '/monitor enable',
-      examples: ['/monitor enable'],
-      permissions: 'Management Role or Administrator',
-      category: 'monitoring',
-    },
-    {
-      name: '/monitor disable',
-      description: 'Disable server monitoring',
-      usage: '/monitor disable',
-      examples: ['/monitor disable'],
-      permissions: 'Management Role or Administrator',
-      category: 'monitoring',
-    },
-    {
-      name: '/monitor status',
-      description: 'Show current monitoring configuration',
-      usage: '/monitor status',
-      examples: ['/monitor status'],
-      permissions: 'Everyone',
-      category: 'monitoring',
-    },
-    {
-      name: '/chart',
-      description: 'Show player activity chart for the past 30 days',
-      usage: '/chart [server:<server_name_or_id>]',
-      examples: [
-        '/chart',
-        '/chart server:My Server',
-        '/chart server:127.0.0.1:7777',
-      ],
-      permissions: 'Everyone',
-      category: 'data',
-    },
-    {
-      name: '/players',
-      description: 'Show current online players for a server',
-      usage: '/players [server:<server_name_or_id>]',
-      examples: [
-        '/players',
-        '/players server:My Server',
-        '/players server:127.0.0.1:7777',
-      ],
-      permissions: 'Everyone',
-      category: 'data',
-    },
-    {
-      name: '/role set',
-      description: 'Set the role that can manage server monitoring',
-      usage: '/role set role:<@role>',
-      examples: [
-        '/role set role:@Server Managers',
-        '/role set role:@Moderators',
-      ],
-      permissions: 'Administrator Only',
-      category: 'config',
-    },
-    {
-      name: '/role remove',
-      description: 'Remove role requirement (Admin-only access)',
-      usage: '/role remove',
-      examples: ['/role remove'],
-      permissions: 'Administrator Only',
-      category: 'config',
-    },
-    {
-      name: '/role show',
-      description: 'Show current role configuration',
-      usage: '/role show',
-      examples: ['/role show'],
-      permissions: 'Everyone',
-      category: 'config',
-    },
-    {
-      name: '/help',
-      description: 'Show this help message',
-      usage: '/help [category:<category>] [command:<command>]',
-      examples: ['/help', '/help category:server', '/help command:server'],
-      permissions: 'Everyone',
-      category: 'utility',
-    },
-  ];
+  const linkRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setLabel('Documentation')
+      .setStyle(ButtonStyle.Link)
+      .setURL('https://github.com/itsneufox/open.monitor#readme'),
+    new ButtonBuilder()
+      .setLabel('Report a Bug')
+      .setStyle(ButtonStyle.Link)
+      .setURL('https://github.com/itsneufox/open.monitor/issues')
+  );
 
-  // Add owner-only commands if user has owner permissions
-  if (interaction.user.id === process.env.OWNER_ID) {
-    commands.push(
-      {
-        name: '/debug',
-        description: 'Show bot configuration and statistics',
-        usage: '/debug',
-        examples: ['/debug'],
-        permissions: 'Bot Owner Only',
-        category: 'utility',
-      },
-      {
-        name: '/cleanup',
-        description: 'Clean up old database data',
-        usage: '/cleanup',
-        examples: ['/cleanup'],
-        permissions: 'Bot Owner Only',
-        category: 'utility',
-      },
-      {
-        name: '/forceupdate',
-        description: 'Force an immediate status update',
-        usage: '/forceupdate [guild:<guild_id>] [all_guilds:<true/false>]',
-        examples: [
-          '/forceupdate',
-          '/forceupdate guild:123456789012345678',
-          '/forceupdate all_guilds:true',
-        ],
-        permissions: 'Bot Owner Only',
-        category: 'utility',
-      }
-    );
-  }
+  if (commandKey) {
+    const command = COMMANDS.find(cmd => cmd.key === commandKey);
 
-  // If specific command is requested, show detailed help
-  if (specificCommand) {
-    const command = commands.find(cmd =>
-      cmd.name.includes(`/${specificCommand}`)
-    );
-    if (command) {
-      const detailEmbed = new EmbedBuilder()
-        .setColor(color)
-        .setTitle(`📖 Command Help: ${command.name}`)
-        .setDescription(command.description)
-        .addFields(
-          {
-            name: '📝 Usage',
-            value: `\`${command.usage}\``,
-            inline: false,
-          },
-          {
-            name: '💡 Examples',
-            value: command.examples.map(ex => `\`${ex}\``).join('\n'),
-            inline: false,
-          },
-          {
-            name: '🔐 Required Permissions',
-            value: command.permissions,
-            inline: true,
-          },
-          {
-            name: '📂 Category',
-            value: getCategoryDisplayName(command.category),
-            inline: true,
-          }
-        )
-        .setFooter({ text: 'Use /help to see all commands' })
-        .setTimestamp();
-
-      await interaction.editReply({ embeds: [detailEmbed] });
+    if (!command) {
+      await interaction.editReply({
+        content:
+          'That command is no longer available. Run `/help` without options to see the latest list.',
+      });
       return;
     }
-  }
 
-  // Filter commands by category if specified
-  let filteredCommands = commands;
-  if (category) {
-    filteredCommands = commands.filter(cmd => cmd.category === category);
-  }
-
-  // Group commands by category
-  const categories = {
-    server: filteredCommands.filter(cmd => cmd.category === 'server'),
-    monitoring: filteredCommands.filter(cmd => cmd.category === 'monitoring'),
-    data: filteredCommands.filter(cmd => cmd.category === 'data'),
-    config: filteredCommands.filter(cmd => cmd.category === 'config'),
-    utility: filteredCommands.filter(cmd => cmd.category === 'utility'),
-  };
-
-  // Create embeds for each category
-  const embeds: EmbedBuilder[] = [];
-
-  // Overview embed (only if no specific category)
-  if (!category) {
-    const overviewEmbed = new EmbedBuilder()
+    const detailEmbed = new EmbedBuilder()
       .setColor(color)
-      .setTitle('🤖 SA:MP/open.mp Bot Help')
-      .setDescription(
-        'A comprehensive Discord bot for monitoring SA:MP and open.mp servers with real-time updates, charts, and player tracking.'
-      )
+      .setTitle(`Command Help: ${command.name}`)
+      .setDescription(command.description)
       .addFields(
+        { name: 'Usage', value: `\`${command.usage}\``, inline: false },
         {
-          name: '📊 Features',
-          value:
-            '• **Real-time monitoring** - Server status updates every 10 minutes\n' +
-            '• **Player tracking** - Live player counts and detailed player lists\n' +
-            '• **Historical charts** - 30-day player activity graphs\n' +
-            '• **Multi-server support** - Monitor multiple servers per Discord server\n' +
-            '• **Channel automation** - Auto-updating channel names with live data\n' +
-            '• **Security features** - Rate limiting, input validation, and permission control',
+          name: 'Examples',
+          value: command.examples.map(example => `- \`${example}\``).join('\n'),
           inline: false,
         },
         {
-          name: '🔧 Quick Start',
-          value:
-            '1️⃣ Add a server: `/server add ip:127.0.0.1 port:7777`\n' +
-            '2️⃣ Setup monitoring: `/monitor setup status_channel:#status`\n' +
-            '3️⃣ Check status: `/server status` or `/chart`\n' +
-            '4️⃣ View players: `/players`',
-          inline: false,
+          name: 'Required Permissions',
+          value: command.permissions,
+          inline: true,
         },
         {
-          name: '📚 Command Categories',
-          value:
-            '**Server Management** - Add, remove, and configure servers\n' +
-            '**Monitoring** - Setup and control automated monitoring\n' +
-            '**Data & Charts** - View charts and player information\n' +
-            '**Configuration** - Manage bot permissions and settings\n' +
-            '**Utility** - Help and diagnostic commands',
-          inline: false,
-        },
-        {
-          name: '🔐 Permissions',
-          value: hasManagementPerms
-            ? '✅ You can use management commands'
-            : '❌ You can only use public commands\n💡 Ask an admin to set up role permissions with `/role set`',
-          inline: false,
+          name: 'Audience',
+          value: formatAudience(command.audience),
+          inline: true,
         }
       )
-      .setFooter({
-        text: 'Use the buttons below to navigate through command categories',
-      })
+      .setFooter({ text: 'Use /help to return to the overview.' })
       .setTimestamp();
 
-    embeds.push(overviewEmbed);
-  }
-
-  // Category embeds
-  Object.entries(categories).forEach(([categoryKey, categoryCommands]) => {
-    if (categoryCommands.length === 0) return;
-
-    const categoryEmbed = new EmbedBuilder()
-      .setColor(color)
-      .setTitle(`📂 ${getCategoryDisplayName(categoryKey)} Commands`)
-      .setDescription(getCategoryDescription(categoryKey))
-      .setTimestamp();
-
-    // Group commands into fields to avoid hitting field limits
-    const commandsPerField = 4;
-    for (let i = 0; i < categoryCommands.length; i += commandsPerField) {
-      const commandGroup = categoryCommands.slice(i, i + commandsPerField);
-      const fieldValue = commandGroup
-        .map(
-          cmd =>
-            `**${cmd.name}**\n${cmd.description}\n*Permissions: ${cmd.permissions}*`
-        )
-        .join('\n\n');
-
-      categoryEmbed.addFields({
-        name: i === 0 ? 'Commands' : `Commands (continued)`,
-        value: fieldValue,
-        inline: false,
-      });
-    }
-
-    embeds.push(categoryEmbed);
-  });
-
-  // If only one embed (specific category), show it directly
-  if (embeds.length === 1) {
-    await interaction.editReply({ embeds });
+    await interaction.editReply({
+      embeds: [detailEmbed],
+      components: [linkRow],
+    });
     return;
   }
 
-  // Setup pagination for multiple embeds
-  let currentPage = 0;
+  const publicCommands = formatCommandList('public');
+  const managementCommands = formatCommandList('management');
+  const utilityCommands = formatCommandList('utility');
 
-  const generateButtons = (page: number) => {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId('help_first')
-        .setLabel('« Overview')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(page === 0),
-      new ButtonBuilder()
-        .setCustomId('help_prev')
-        .setLabel('‹ Previous')
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(page === 0),
-      new ButtonBuilder()
-        .setCustomId('help_next')
-        .setLabel('Next ›')
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(page >= embeds.length - 1),
-      new ButtonBuilder()
-        .setCustomId('help_last')
-        .setLabel('Last »')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(page >= embeds.length - 1)
-    );
-  };
+  const quickStart =
+    '1. `/manage` → Setup Server – run the guided wizard\n' +
+    '2. `/status` – verify the active server\n' +
+    '3. `/players` & `/chart` – share data with your community\n' +
+    '4. `/manage` – adjust channels, servers, and settings';
 
-  // Send initial message
-  const buttons = embeds.length > 1 ? generateButtons(currentPage) : undefined;
-  const message = await interaction.editReply({
-    embeds: [embeds[currentPage]!],
-    components: buttons ? [buttons] : [],
-  });
-
-  // Setup button collector
-  if (embeds.length > 1) {
-    const collector = message.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      time: 300000, // 5 minutes
-    });
-
-    collector.on('collect', async buttonInteraction => {
-      if (buttonInteraction.user.id !== interaction.user.id) {
-        await buttonInteraction.reply({
-          content: 'Only the user who ran the command can use these buttons.',
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
+  const mainEmbed = new EmbedBuilder()
+    .setColor(color)
+    .setTitle('open.monitor Help Center')
+    .setDescription(
+      'Your dashboard for keeping SA:MP and open.mp communities online. ' +
+        'Use the sections below to find the right command quickly.'
+    )
+    .addFields(
+      { name: 'Quick Start', value: quickStart },
+      { name: 'Public Commands', value: publicCommands },
+      {
+        name: 'Management Commands',
+        value: hasManagementPerms
+          ? managementCommands
+          : `${managementCommands}\n\n_Only administrators or the configured management role can run these. Ask a staff member to set up monitoring for you._`,
+      },
+      {
+        name: 'Utility Commands',
+        value: utilityCommands,
       }
+    )
+    .setFooter({
+      text: 'Need to report a bug? Use /reportbug or the button below.',
+    })
+    .setTimestamp();
 
-      switch (buttonInteraction.customId) {
-        case 'help_first':
-          currentPage = 0;
-          break;
-        case 'help_prev':
-          currentPage = Math.max(0, currentPage - 1);
-          break;
-        case 'help_next':
-          currentPage = Math.min(embeds.length - 1, currentPage + 1);
-          break;
-        case 'help_last':
-          currentPage = embeds.length - 1;
-          break;
-      }
+  await interaction.editReply({ embeds: [mainEmbed], components: [linkRow] });
+}
 
-      const newButtons = generateButtons(currentPage);
-      await buttonInteraction.update({
-        embeds: [embeds[currentPage]!],
-        components: [newButtons],
-      });
-    });
+function formatCommandList(audience: Audience): string {
+  const commands = COMMANDS.filter(cmd => cmd.audience === audience);
+  if (commands.length === 0) return '-';
+  return commands
+    .map(cmd => `- **${cmd.name}** - ${cmd.description}`)
+    .join('\n');
+}
 
-    collector.on('end', async () => {
-      const disabledButtons =
-        new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder()
-            .setCustomId('help_first')
-            .setLabel('« Overview')
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(true),
-          new ButtonBuilder()
-            .setCustomId('help_prev')
-            .setLabel('‹ Previous')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(true),
-          new ButtonBuilder()
-            .setCustomId('help_next')
-            .setLabel('Next ›')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(true),
-          new ButtonBuilder()
-            .setCustomId('help_last')
-            .setLabel('Last »')
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(true)
-        );
-
-      try {
-        await interaction.editReply({
-          components: [disabledButtons],
-        });
-      } catch {
-        // Message might have been deleted, ignore error
-      }
-    });
+function formatAudience(audience: Audience): string {
+  switch (audience) {
+    case 'public':
+      return 'Everyone';
+    case 'management':
+      return 'Management role / Administrator';
+    case 'owner':
+      return 'Bot Owner';
+    default:
+      return 'Everyone';
   }
-}
-
-function getCategoryDisplayName(category: string): string {
-  const displayNames: Record<string, string> = {
-    server: 'Server Management',
-    monitoring: 'Monitoring',
-    data: 'Data & Charts',
-    config: 'Configuration',
-    utility: 'Utility',
-  };
-  return displayNames[category] || category;
-}
-
-function getCategoryDescription(category: string): string {
-  const descriptions: Record<string, string> = {
-    server:
-      'Commands for adding, removing, and managing SA:MP/open.mp servers.',
-    monitoring:
-      'Commands for setting up and controlling automated server monitoring.',
-    data: 'Commands for viewing charts, player lists, and historical data.',
-    config: 'Commands for managing bot permissions, roles, and configuration.',
-    utility: 'Utility commands including help, debug, and maintenance tools.',
-  };
-  return descriptions[category] || 'Commands in this category.';
 }

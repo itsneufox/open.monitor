@@ -108,13 +108,13 @@ export async function execute(
           {
             name: 'Data Collection',
             value:
-              'The bot collects player data every 10 minutes when monitoring is enabled.',
+              'The bot collects player data every 2 minutes when monitoring is enabled.',
             inline: false,
           },
           {
             name: 'Enable Monitoring',
             value:
-              'Use `/monitor setup` to start collecting data automatically.',
+              'Open `/manage`, run **Setup Server**, and monitoring will start automatically.',
             inline: false,
           }
         )
@@ -213,12 +213,12 @@ export async function execute(
     const guildIconURL = interaction.guild?.iconURL();
     if (guildIconURL) {
       embed.setFooter({
-        text: `Data collected every 10 minutes • Last updated`,
+        text: `Data collected every 2 minutes - Last updated`,
         iconURL: guildIconURL,
       });
     } else {
       embed.setFooter({
-        text: `Data collected every 10 minutes • Last updated`,
+        text: `Data collected every 2 minutes - Last updated`,
       });
     }
 

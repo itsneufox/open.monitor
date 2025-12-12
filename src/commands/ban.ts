@@ -16,6 +16,7 @@ interface BannedIP {
 export const data = new SlashCommandBuilder()
   .setName('ban')
   .setDescription('Manage IP address bans (Owner only)')
+  .setDefaultMemberPermissions(null) // Hidden from non-admins
   .addSubcommand(subcommand =>
     subcommand
       .setName('ip')
@@ -50,6 +51,8 @@ export const data = new SlashCommandBuilder()
   .addSubcommand(subcommand =>
     subcommand.setName('clear').setDescription('Clear all banned IP addresses')
   );
+
+export const guildOnly = '1409643885726138380'; // Owner guild only
 
 export async function execute(
   interaction: ChatInputCommandInteraction,

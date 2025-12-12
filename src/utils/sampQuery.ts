@@ -67,13 +67,13 @@ export class SAMPQuery {
     try {
       let decoded = buffer.toString('utf8');
 
-      if (decoded.includes('ï¿½') || decoded.includes('\ufffd')) {
+      if (decoded.includes('\ufffd')) {
         const encodings = ['latin1', 'cp1252', 'iso-8859-1', 'cp850'];
 
         for (const encoding of encodings) {
           try {
             decoded = iconv.decode(buffer, encoding);
-            if (!decoded.includes('ï¿½') && !decoded.includes('\ufffd')) {
+            if (!decoded.includes('\ufffd')) {
               break;
             }
           } catch {

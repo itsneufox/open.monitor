@@ -1,3 +1,4 @@
+import type { Client } from 'discord.js';
 import { ServerConfig } from '../types';
 
 interface IPQueryData {
@@ -22,6 +23,7 @@ interface IPQueryData {
 
 class SecurityValidator {
   private static ipQueryLimits = new Map<string, IPQueryData>();
+  private static discordClient: Pick<Client, 'channels'> | null = null;
 
   // Hardcoded bans - these will block any server using these IPs/domains on ANY port
   // Format: IP or domain without port (e.g., "149.56.45.135" blocks "149.56.45.135:7777", "149.56.45.135:7778", etc.)
@@ -51,8 +53,41 @@ class SecurityValidator {
     USER_BURST_WINDOW: 10000,
   };
 
-  static validateServerIP(_ip: string): boolean {
-    return true;
+  static setClient(client: Pick<Client, 'channels'>): void {
+    this.discordClient = client;
+  }
+
+  static validateServerIP(ip: string): boolean {
+    if (!ip) return false;
+    const trimmed = ip.trim();
+    if (!trimmed) return false;
+
+    const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (ipv4Regex.test(trimmed)) {
+      const octets = trimmed.split('.').map(Number);
+      if (octets.some(octet => Number.isNaN(octet) || octet < 0 || octet > 255))
+        return false;
+
+      const [a = 0, b = 0] = octets;
+      if (
+        a === 10 ||
+        (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 168) ||
+        a === 127 ||
+        a === 0 ||
+        (a === 169 && b === 254) ||
+        a >= 224 ||
+        trimmed === '255.255.255.255'
+      ) {
+        return false;
+      }
+
+      return true;
+    }
+
+    const domainRegex =
+      /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+    return domainRegex.test(trimmed) && trimmed.length <= 253;
   }
 
   static canQueryIP(
@@ -280,16 +315,12 @@ class SecurityValidator {
   ): Promise<void> {
     try {
       if (guildId !== '1309527094476275782') return;
-
-      const clientModule = await import('../index');
-      const client = clientModule.default as {
-        channels?: { fetch: (id: string) => Promise<unknown> };
-      };
-
-      if (!client || !client.channels) return;
+      if (!this.discordClient?.channels) return;
 
       const channelId = '1405066715687026718';
-      const channel = await client.channels.fetch(channelId).catch(() => null);
+      const channel = await this.discordClient.channels
+        .fetch(channelId)
+        .catch(() => null);
 
       if (!channel || typeof channel !== 'object' || !('send' in channel))
         return;

@@ -144,7 +144,7 @@ export class WebhookLogger {
 
     try {
       const embed = new EmbedBuilder()
-        .setTitle(`🚨 ${options.title}`)
+        .setTitle(options.title)
         .setColor(0xed4245)
         .setTimestamp();
 

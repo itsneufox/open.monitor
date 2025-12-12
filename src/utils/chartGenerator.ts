@@ -37,7 +37,7 @@ export async function generateChart(
     ? (data as ChartDataWrapper).value!
     : data;
 
-  console.log('📊 Chart Debug Info:', {
+  console.log('Chart debug info:', {
     hasValue: !!(data as ChartDataWrapper).value,
     originalDataKeys: Object.keys(data),
     chartDataKeys: Object.keys(chartData),
@@ -57,7 +57,7 @@ export async function generateChart(
     (a, b) => a.date - b.date
   );
 
-  console.log('📊 Processed Chart Data:', {
+  console.log('Processed chart data:', {
     sortedDaysCount: sortedDays.length,
     dateRange: {
       first: new Date(sortedDays[0]?.date || 0),

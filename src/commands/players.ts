@@ -113,7 +113,7 @@ export async function execute(
   if (banCheck.banned) {
     const embed = new EmbedBuilder()
       .setColor(0xff0000)
-      .setTitle('🚫 Server Banned')
+      .setTitle('Server Banned')
       .setDescription(
         `**${targetServer.name}** has been permanently banned from monitoring.`
       )
@@ -235,7 +235,7 @@ export async function execute(
 
       const embed = new EmbedBuilder()
         .setColor(0xff9500)
-        .setTitle('⚠️ Player List Error')
+        .setTitle('Player List Error')
         .setDescription(
           `**${targetServer.name}** has ${info.players} players online, but failed to retrieve player list.`
         )
@@ -271,7 +271,7 @@ export async function execute(
 
       const embed = new EmbedBuilder()
         .setColor(0xff9500)
-        .setTitle('⚠️ Player Names Unavailable')
+        .setTitle('Player Names Unavailable')
         .setDescription(
           `**${targetServer.name}** reports ${info.players} players online, but player names could not be retrieved.`
         )
@@ -287,12 +287,12 @@ export async function execute(
           {
             name: 'Possible Reasons',
             value:
-              '• Network connectivity issues\n' + '• Temporary server overload',
+              '- Network connectivity issues\n' + '- Temporary server overload',
             inline: false,
           }
         )
         .setFooter({
-          text: `${targetServer.ip}:${targetServer.port} • This doesn't affect server monitoring`,
+          text: `${targetServer.ip}:${targetServer.port} - This doesn't affect server monitoring`,
         })
         .setTimestamp();
 
@@ -337,8 +337,8 @@ export async function execute(
         .setFooter({
           text:
             totalPages > 1
-              ? `Page ${page + 1}/${totalPages} • ${players.length} players • ${targetServer.ip}:${targetServer.port}`
-              : `${players.length} players • ${targetServer.ip}:${targetServer.port}`,
+              ? `Page ${page + 1}/${totalPages} - ${players.length} players - ${targetServer.ip}:${targetServer.port}`
+              : `${players.length} players - ${targetServer.ip}:${targetServer.port}`,
         })
         .setTimestamp();
     };
@@ -347,22 +347,22 @@ export async function execute(
       return new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId('players_first')
-          .setLabel('« First')
+          .setLabel('First')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(page === 0),
         new ButtonBuilder()
           .setCustomId('players_prev')
-          .setLabel('‹ Previous')
+          .setLabel('Previous')
           .setStyle(ButtonStyle.Primary)
           .setDisabled(page === 0),
         new ButtonBuilder()
           .setCustomId('players_next')
-          .setLabel('Next ›')
+          .setLabel('Next')
           .setStyle(ButtonStyle.Primary)
           .setDisabled(page >= totalPages - 1),
         new ButtonBuilder()
           .setCustomId('players_last')
-          .setLabel('Last »')
+          .setLabel('Last')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(page >= totalPages - 1)
       );
@@ -420,22 +420,22 @@ export async function execute(
           new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder()
               .setCustomId('players_first')
-              .setLabel('« First')
+              .setLabel('First')
               .setStyle(ButtonStyle.Secondary)
               .setDisabled(true),
             new ButtonBuilder()
               .setCustomId('players_prev')
-              .setLabel('‹ Previous')
+              .setLabel('Previous')
               .setStyle(ButtonStyle.Primary)
               .setDisabled(true),
             new ButtonBuilder()
               .setCustomId('players_next')
-              .setLabel('Next ›')
+              .setLabel('Next')
               .setStyle(ButtonStyle.Primary)
               .setDisabled(true),
             new ButtonBuilder()
               .setCustomId('players_last')
-              .setLabel('Last »')
+              .setLabel('Last')
               .setStyle(ButtonStyle.Secondary)
               .setDisabled(true)
           );

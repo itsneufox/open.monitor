@@ -4,11 +4,30 @@ import {
   EmbedBuilder,
   MessageFlags,
 } from 'discord.js';
-import { CustomClient } from '../types';
+import { CustomClient, getServerDataKey } from '../types';
 
 export const data = new SlashCommandBuilder()
   .setName('debug')
-  .setDescription('Show bot configuration and statistics (Owner only)');
+  .setDescription('Diagnostic tools and statistics (Owner only)')
+  .setDefaultMemberPermissions(null) // Hidden from non-admins
+  .addSubcommand(subcommand =>
+    subcommand
+      .setName('overview')
+      .setDescription('Show bot configuration and statistics')
+  )
+  .addSubcommand(subcommand =>
+    subcommand
+      .setName('uptime')
+      .setDescription('View raw uptime statistics for a server')
+      .addStringOption(option =>
+        option
+          .setName('server')
+          .setDescription('Server name or IP:port')
+          .setRequired(true)
+      )
+  );
+
+export const guildOnly = '1409643885726138380'; // Owner guild only
 
 export async function execute(
   interaction: ChatInputCommandInteraction,
@@ -24,6 +43,27 @@ export async function execute(
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+  const subcommand = interaction.options.getSubcommand();
+
+  try {
+    switch (subcommand) {
+      case 'overview':
+        await handleOverview(interaction, client);
+        break;
+      case 'uptime':
+        await handleUptime(interaction, client);
+        break;
+    }
+  } catch (error) {
+    console.error('Debug command error:', error);
+    await interaction.editReply('❌ An error occurred during debug operation.');
+  }
+}
+
+async function handleOverview(
+  interaction: ChatInputCommandInteraction,
+  client: CustomClient
+): Promise<void> {
   try {
     const guildConfig = client.guildConfigs.get(interaction.guildId!);
     const servers = guildConfig?.servers || [];
@@ -47,21 +87,21 @@ export async function execute(
 
       guildList.push(
         `**${guildName}** (${memberCount} members)\n` +
-          `   └ ID: \`${guildId}\`\n` +
-          `   └ Servers: ${config.servers.length}\n` +
-          `   └ Status: ${config.interval?.enabled ? '🟢 Monitoring' : '⚪ Inactive'}\n` +
-          `   └ Owner: ${guild?.ownerId ? `<@${guild.ownerId}>` : 'Unknown'}`
+          `   - ID: \`${guildId}\`\n` +
+          `   - Servers: ${config.servers.length}\n` +
+          `   - Status: ${config.interval?.enabled ? '🟢 Monitoring' : '⚪ Inactive'}\n` +
+          `   - Owner: ${guild?.ownerId ? `<@${guild.ownerId}>` : 'Unknown'}`
       );
     }
 
     const embed = new EmbedBuilder()
       .setColor(0x3498db)
-      .setTitle('🔧 Bot Owner Debug Panel')
+      .setTitle('Bot Owner Debug Panel')
       .setDescription(`Debug info for ${client.user?.tag}`)
       .setTimestamp();
 
     embed.addFields({
-      name: '📊 Global Statistics',
+      name: 'Global Statistics',
       value:
         `**Total Guilds:** ${totalGuilds}\n` +
         `**Total Servers:** ${totalServers}\n` +
@@ -79,7 +119,7 @@ export async function execute(
         : null;
 
       embed.addFields({
-        name: '🏠 Current Guild Information',
+        name: 'Current Guild Information',
         value:
           `**Guild:** ${interaction.guild?.name}\n` +
           `**Guild ID:** \`${interaction.guildId}\`\n` +
@@ -99,9 +139,9 @@ export async function execute(
             const addedBy = client.users.cache.get(server.addedBy);
             return (
               `${isActive ? '🟢' : '⚪'} **${server.name}** (\`${server.id}\`)\n` +
-              `   └ Address: \`${server.ip}:${server.port}\`\n` +
-              `   └ Added: <t:${Math.floor(server.addedAt / 1000)}:R>\n` +
-              `   └ By: ${addedBy?.tag || `Unknown (${server.addedBy})`}`
+              `   - Address: \`${server.ip}:${server.port}\`\n` +
+              `   - Added: <t:${Math.floor(server.addedAt / 1000)}:R>\n` +
+              `   - By: ${addedBy?.tag || `Unknown (${server.addedBy})`}`
             );
           })
           .join('\n\n');
@@ -128,15 +168,15 @@ export async function execute(
             embed.addFields({
               name:
                 index === 0
-                  ? '🖥️ Configured Servers'
-                  : `🖥️ Servers (continued ${index + 1})`,
+                  ? 'Configured Servers'
+                  : `Servers (continued ${index + 1})`,
               value: chunk,
               inline: false,
             });
           });
         } else {
           embed.addFields({
-            name: '🖥️ Configured Servers',
+            name: 'Configured Servers',
             value: serverList,
             inline: false,
           });
@@ -178,7 +218,7 @@ export async function execute(
 
         if (channels.length > 0) {
           embed.addFields({
-            name: '📺 Monitoring Channels',
+            name: 'Monitoring Channels',
             value: channels.join('\n'),
             inline: false,
           });
@@ -189,7 +229,7 @@ export async function execute(
             interval.managementRoleId
           );
           embed.addFields({
-            name: '👥 Management Role',
+            name: 'Management Role',
             value: `${role ? role.toString() : '❌ Missing'} (\`${interval.managementRoleId}\`)`,
             inline: true,
           });
@@ -208,13 +248,13 @@ export async function execute(
         .join('\n');
 
       embed.addFields({
-        name: '⏳ Rate Limit Queues',
+        name: 'Rate Limit Queues',
         value: queueInfo,
         inline: false,
       });
     } else {
       embed.addFields({
-        name: '⏳ Rate Limit Queues',
+        name: 'Rate Limit Queues',
         value: 'No active queues',
         inline: false,
       });
@@ -239,20 +279,20 @@ export async function execute(
           .join('\n');
 
         embed.addFields({
-          name: `🛡️ Rate Limiting (${activeIPs} active IPs)`,
+          name: `Rate Limiting (${activeIPs} active IPs)`,
           value: summary || 'No active rate limits',
           inline: false,
         });
       } else {
         embed.addFields({
-          name: '🛡️ Rate Limiting',
+          name: 'Rate Limiting',
           value: 'No active rate limits',
           inline: false,
         });
       }
     } catch {
       embed.addFields({
-        name: '🛡️ Rate Limiting',
+        name: 'Rate Limiting',
         value: 'Error fetching rate limit stats',
         inline: false,
       });
@@ -270,8 +310,8 @@ export async function execute(
             embed.addFields({
               name:
                 fieldIndex === 1
-                  ? '🌐 All Guilds Overview'
-                  : `🌐 Guilds (continued ${fieldIndex})`,
+                  ? 'All Guilds Overview'
+                  : `Guilds (continued ${fieldIndex})`,
               value: currentField,
               inline: false,
             });
@@ -286,15 +326,15 @@ export async function execute(
           embed.addFields({
             name:
               fieldIndex === 1
-                ? '🌐 All Guilds Overview'
-                : `🌐 Guilds (continued ${fieldIndex})`,
+                ? 'All Guilds Overview'
+                : `Guilds (continued ${fieldIndex})`,
             value: currentField,
             inline: false,
           });
         }
       } else {
         embed.addFields({
-          name: '🌐 All Guilds Overview',
+          name: 'All Guilds Overview',
           value: guildOverview,
           inline: false,
         });
@@ -322,7 +362,7 @@ export async function execute(
       }
 
       embed.addFields({
-        name: '💾 Database Statistics',
+        name: 'Database Statistics',
         value:
           `**Chart Data Points:** ${totalChartEntries}\n` +
           `**Uptime Records:** ${totalUptimeEntries}\n` +
@@ -331,7 +371,7 @@ export async function execute(
       });
     } catch {
       embed.addFields({
-        name: '💾 Database Statistics',
+        name: 'Database Statistics',
         value: 'Error fetching database statistics',
         inline: false,
       });
@@ -339,7 +379,7 @@ export async function execute(
 
     const discordjs = await import('discord.js');
     const footerOptions: { text: string; iconURL?: string } = {
-      text: `Owner Debug Panel • Process ID: ${process.pid} • Discord.js v${discordjs.version}`,
+      text: `Owner Debug Panel - Process ID: ${process.pid} - Discord.js v${discordjs.version}`,
     };
 
     const botAvatarURL = client.user?.displayAvatarURL();
@@ -365,5 +405,106 @@ export async function execute(
       .setTimestamp();
 
     await interaction.editReply({ embeds: [errorEmbed] });
+  }
+}
+
+async function handleUptime(
+  interaction: ChatInputCommandInteraction,
+  client: CustomClient
+): Promise<void> {
+  try {
+    const serverInput = interaction.options.getString('server', true);
+    const servers = (await client.servers.get(interaction.guildId!)) || [];
+
+    // Find server by name or IP:port
+    const server = servers.find(
+      s =>
+        s.name.toLowerCase().includes(serverInput.toLowerCase()) ||
+        `${s.ip}:${s.port}` === serverInput
+    );
+
+    if (!server) {
+      await interaction.editReply({
+        content: `❌ Server not found. Try using the exact name or IP:port format.`,
+      });
+      return;
+    }
+
+    const serverDataKey = getServerDataKey(interaction.guildId!, server.id);
+    const uptimeStats = await client.uptimes.get(serverDataKey);
+
+    if (!uptimeStats) {
+      await interaction.editReply({
+        content: `No uptime data found for **${server.name}**.`,
+      });
+      return;
+    }
+
+    const totalChecks = uptimeStats.uptime + uptimeStats.downtime;
+    const percentage =
+      totalChecks > 0 ? (uptimeStats.uptime / totalChecks) * 100 : 0;
+
+    const lastCheckDate = uptimeStats.lastCheckTime
+      ? new Date(uptimeStats.lastCheckTime)
+      : null;
+    const timeSinceLastCheck = uptimeStats.lastCheckTime
+      ? Date.now() - uptimeStats.lastCheckTime
+      : null;
+
+    const embed = new EmbedBuilder()
+      .setColor(0x3498db)
+      .setTitle(`Uptime Statistics: ${server.name}`)
+      .setDescription(`\`${server.ip}:${server.port}\``)
+      .addFields(
+        {
+          name: '✅ Uptime Checks',
+          value: uptimeStats.uptime.toString(),
+          inline: true,
+        },
+        {
+          name: '❌ Downtime Checks',
+          value: uptimeStats.downtime.toString(),
+          inline: true,
+        },
+        {
+          name: 'Total Checks',
+          value: totalChecks.toString(),
+          inline: true,
+        },
+        {
+          name: 'Uptime Percentage',
+          value: `${percentage.toFixed(2)}%`,
+          inline: true,
+        },
+        {
+          name: 'Monitoring Duration',
+          value: `~${Math.floor(totalChecks / 60)} hours (${totalChecks} minutes)`,
+          inline: true,
+        },
+        {
+          name: 'Server Data Key',
+          value: `\`${serverDataKey}\``,
+          inline: false,
+        }
+      )
+      .setTimestamp();
+
+    if (lastCheckDate) {
+      const minutesAgo = timeSinceLastCheck
+        ? Math.floor(timeSinceLastCheck / 60000)
+        : 0;
+      embed.addFields({
+        name: 'Last Check',
+        value: `<t:${Math.floor(lastCheckDate.getTime() / 1000)}:R> (${minutesAgo} minute${minutesAgo !== 1 ? 's' : ''} ago)`,
+        inline: false,
+      });
+    }
+
+    await interaction.editReply({ embeds: [embed] });
+  } catch (error) {
+    console.error('Uptime stats error:', error);
+    await interaction.editReply({
+      content: '❌ An error occurred while fetching uptime statistics.',
+    });
   }
 }
