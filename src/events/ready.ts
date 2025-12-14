@@ -368,11 +368,25 @@ export async function execute(client: CustomClient): Promise<void> {
                         `Created new banned server status in ${guild.name}`
                       );
                     }
-                  } catch (sendError) {
-                    console.error(
-                      `Failed to send banned server status:`,
-                      sendError
-                    );
+                  } catch (sendError: unknown) {
+                    // Check for permission errors
+                    const error = sendError as {
+                      code?: number;
+                      status?: number;
+                    };
+                    if (error?.code === 50001 || error?.status === 403) {
+                      console.error(
+                        `Missing permissions for status channel in ${guild.name}. Disabling monitoring.`
+                      );
+                      interval.enabled = false;
+                      await client.intervals.set(guild.id, interval);
+                      client.guildConfigs.set(guild.id, guildConfig);
+                    } else {
+                      console.error(
+                        `Failed to send banned server status:`,
+                        sendError
+                      );
+                    }
                   }
                 }
               }
@@ -588,8 +602,22 @@ export async function execute(client: CustomClient): Promise<void> {
                   if (!isProduction) {
                     console.log(`Created new status message in ${guild.name}`);
                   }
-                } catch (sendError) {
-                  console.error(`Failed to send status message:`, sendError);
+                } catch (sendError: unknown) {
+                  // Check for permission errors
+                  const error = sendError as {
+                    code?: number;
+                    status?: number;
+                  };
+                  if (error?.code === 50001 || error?.status === 403) {
+                    console.error(
+                      `Missing permissions for status channel in ${guild.name}. Disabling monitoring.`
+                    );
+                    interval.enabled = false;
+                    await client.intervals.set(guild.id, interval);
+                    client.guildConfigs.set(guild.id, guildConfig);
+                  } else {
+                    console.error(`Failed to send status message:`, sendError);
+                  }
                 }
               }
             }
@@ -852,11 +880,25 @@ export async function execute(client: CustomClient): Promise<void> {
                     `Chart sent to ${guild.name} for ${activeServer.name} (value: ${chartValue})`
                   );
                 }
-              } catch (chartError) {
-                console.error(
-                  `Failed to send chart to ${guild.name}:`,
-                  chartError
-                );
+              } catch (chartError: unknown) {
+                // Check for permission errors
+                const error = chartError as { code?: number; status?: number };
+                if (error?.code === 50001 || error?.status === 403) {
+                  console.error(
+                    `Missing permissions for chart channel in ${guild.name}. Disabling chart generation for this guild.`
+                  );
+                  // Clear chart channel to prevent future attempts
+                  const guildConfig = client.guildConfigs.get(guild.id);
+                  if (guildConfig?.interval) {
+                    delete guildConfig.interval.chartChannel;
+                    await client.intervals.set(guild.id, guildConfig.interval);
+                  }
+                } else {
+                  console.error(
+                    `Failed to send chart to ${guild.name}:`,
+                    chartError
+                  );
+                }
               }
             }
           }

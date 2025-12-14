@@ -63,6 +63,33 @@ interface ServerMetadata {
 }
 
 export class SAMPQuery {
+  private failureTracker = new Map<
+    string,
+    { count: number; lastFailure: number; type?: string }
+  >();
+  private readonly MAX_CONSECUTIVE_FAILURES = 5;
+  private readonly FAILURE_RESET_TIME = 300000; // 5 minutes
+
+  private recordFailure(serverKey: string, errorType: string): void {
+    const existing = this.failureTracker.get(serverKey);
+    if (existing) {
+      existing.count++;
+      existing.lastFailure = Date.now();
+      existing.type = errorType;
+    } else {
+      this.failureTracker.set(serverKey, {
+        count: 1,
+        lastFailure: Date.now(),
+        type: errorType,
+      });
+    }
+  }
+
+  private recordSuccess(serverKey: string): void {
+    // Clear failure record on successful query
+    this.failureTracker.delete(serverKey);
+  }
+
   private decodeString(buffer: Buffer): string {
     try {
       let decoded = buffer.toString('utf8');
@@ -474,6 +501,29 @@ export class SAMPQuery {
       return null;
     }
 
+    // Check circuit breaker
+    const serverKey = `${server.ip}:${server.port}`;
+    const failureRecord = this.failureTracker.get(serverKey);
+    if (failureRecord) {
+      const timeSinceLastFailure = Date.now() - failureRecord.lastFailure;
+
+      // Reset counter if enough time has passed
+      if (timeSinceLastFailure > this.FAILURE_RESET_TIME) {
+        this.failureTracker.delete(serverKey);
+      } else if (failureRecord.count >= this.MAX_CONSECUTIVE_FAILURES) {
+        // Circuit is open - stop trying
+        const errorType = failureRecord.type || 'connection';
+        if (failureRecord.count === this.MAX_CONSECUTIVE_FAILURES) {
+          // Only log once when circuit first opens
+          console.error(
+            `Circuit breaker OPEN for ${serverKey} - ${errorType} failures. Stopping queries for ${Math.round(this.FAILURE_RESET_TIME / 60000)} minutes.`
+          );
+          failureRecord.count++; // Increment to avoid logging again
+        }
+        return null;
+      }
+    }
+
     return new Promise(resolve => {
       const socket = dgram.createSocket('udp4');
       const timeoutMs = 5000;
@@ -493,23 +543,36 @@ export class SAMPQuery {
           return;
         }
 
+        // Record success to reset circuit breaker
+        this.recordSuccess(serverKey);
+
         resolve(data);
       });
 
       socket.on('error', error => {
         clearTimeout(timeout);
         socket.close();
+
+        const nodeError = error as { code?: string };
+        const errorType =
+          nodeError?.code === 'ENOTFOUND' ? 'DNS' : 'connection';
+        this.recordFailure(serverKey, errorType);
+
         console.error(`SA:MP query error (${opcode}):`, error);
         resolve(null);
       });
 
       const packet =
         customPacket || this.createPacket(server.ip, server.port, opcode);
-
       socket.send(packet, server.port, server.ip, error => {
         if (error) {
           clearTimeout(timeout);
           socket.close();
+
+          const nodeError = error as { code?: string };
+          const errorType = nodeError?.code === 'ENOTFOUND' ? 'DNS' : 'send';
+          this.recordFailure(serverKey, errorType);
+
           console.error(`Failed to send SA:MP query (${opcode}):`, error);
           resolve(null);
         }
