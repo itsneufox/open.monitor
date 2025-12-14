@@ -18,7 +18,7 @@ import {
   TextInputStyle,
   ModalSubmitInteraction,
 } from 'discord.js';
-import { CustomClient } from '../types';
+import { CustomClient, IntervalConfig } from '../types';
 import { hasManagementPermission } from '../utils/permissions';
 
 export const data = new SlashCommandBuilder()
@@ -721,7 +721,9 @@ async function handleImagesClearButton(
   client: CustomClient
 ): Promise<void> {
   const servers = (await client.servers.get(interaction.guildId!)) || [];
-  const intervalConfig = await client.intervals.get(interaction.guildId!);
+  const intervalConfig = (await client.intervals.get(interaction.guildId!)) as
+    | IntervalConfig
+    | undefined;
   const activeServer = servers.find(
     s => s.id === intervalConfig?.activeServerId
   );
@@ -741,9 +743,13 @@ async function handleImagesClearButton(
 
   let guildConfig = client.guildConfigs.get(interaction.guildId!) || {
     servers: [],
-    interval: intervalConfig,
   };
   guildConfig.servers = servers;
+  if (intervalConfig) {
+    guildConfig.interval = intervalConfig;
+  } else {
+    delete guildConfig.interval;
+  }
   client.guildConfigs.set(interaction.guildId!, guildConfig);
 
   await interaction.reply({
@@ -1135,7 +1141,9 @@ export async function handleBannerModal(
   }
 
   const servers = (await client.servers.get(interaction.guildId!)) || [];
-  const intervalConfig = await client.intervals.get(interaction.guildId!);
+  const intervalConfig = (await client.intervals.get(interaction.guildId!)) as
+    | IntervalConfig
+    | undefined;
   const activeServer = servers.find(
     s => s.id === intervalConfig?.activeServerId
   );
@@ -1152,9 +1160,13 @@ export async function handleBannerModal(
 
   let guildConfig = client.guildConfigs.get(interaction.guildId!) || {
     servers: [],
-    interval: intervalConfig,
   };
   guildConfig.servers = servers;
+  if (intervalConfig) {
+    guildConfig.interval = intervalConfig;
+  } else {
+    delete guildConfig.interval;
+  }
   client.guildConfigs.set(interaction.guildId!, guildConfig);
 
   await interaction.editReply({
@@ -1179,7 +1191,9 @@ export async function handleLogoModal(
   }
 
   const servers = (await client.servers.get(interaction.guildId!)) || [];
-  const intervalConfig = await client.intervals.get(interaction.guildId!);
+  const intervalConfig = (await client.intervals.get(interaction.guildId!)) as
+    | IntervalConfig
+    | undefined;
   const activeServer = servers.find(
     s => s.id === intervalConfig?.activeServerId
   );
@@ -1196,9 +1210,13 @@ export async function handleLogoModal(
 
   let guildConfig = client.guildConfigs.get(interaction.guildId!) || {
     servers: [],
-    interval: intervalConfig,
   };
   guildConfig.servers = servers;
+  if (intervalConfig) {
+    guildConfig.interval = intervalConfig;
+  } else {
+    delete guildConfig.interval;
+  }
   client.guildConfigs.set(interaction.guildId!, guildConfig);
 
   await interaction.editReply({
