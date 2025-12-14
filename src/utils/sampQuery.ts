@@ -526,15 +526,22 @@ export class SAMPQuery {
 
     return new Promise(resolve => {
       const socket = dgram.createSocket('udp4');
-      const timeoutMs = 5000;
+      const timeoutMs = 15000;
+      const startTime = Date.now();
 
       const timeout = setTimeout(() => {
+        const elapsed = Date.now() - startTime;
+        console.warn(
+          `[TIMEOUT] ${serverKey} did not respond within ${timeoutMs}ms (opcode: ${opcode}, elapsed: ${elapsed}ms)`
+        );
+        this.recordFailure(serverKey, 'timeout');
         socket.close();
         resolve(null);
       }, timeoutMs);
 
       socket.on('message', data => {
         clearTimeout(timeout);
+        const elapsed = Date.now() - startTime;
         socket.close();
 
         if (!SecurityValidator.validateSAMPResponse(data, server, opcode)) {
@@ -545,6 +552,13 @@ export class SAMPQuery {
 
         // Record success to reset circuit breaker
         this.recordSuccess(serverKey);
+
+        // Log slow responses (> 5 seconds)
+        if (elapsed > 5000) {
+          console.warn(
+            `[SLOW QUERY] ${serverKey} responded in ${elapsed}ms (opcode: ${opcode})`
+          );
+        }
 
         resolve(data);
       });

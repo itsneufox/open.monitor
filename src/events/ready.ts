@@ -363,6 +363,8 @@ export async function execute(client: CustomClient): Promise<void> {
                       embeds: [serverEmbed],
                     });
                     interval.statusMessage = newMsg.id;
+                    await client.intervals.set(guild.id, interval);
+                    client.guildConfigs.set(guild.id, guildConfig);
                     if (!isProduction) {
                       console.log(
                         `Created new banned server status in ${guild.name}`
@@ -599,6 +601,8 @@ export async function execute(client: CustomClient): Promise<void> {
                     embeds: [serverEmbed],
                   });
                   interval.statusMessage = newMsg.id;
+                  await client.intervals.set(guild.id, interval);
+                  client.guildConfigs.set(guild.id, guildConfig);
                   if (!isProduction) {
                     console.log(`Created new status message in ${guild.name}`);
                   }
