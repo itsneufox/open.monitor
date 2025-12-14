@@ -526,7 +526,7 @@ export class SAMPQuery {
 
     return new Promise(resolve => {
       const socket = dgram.createSocket('udp4');
-      const timeoutMs = 15000;
+      const timeoutMs = 20000;
       const startTime = Date.now();
 
       const timeout = setTimeout(() => {
