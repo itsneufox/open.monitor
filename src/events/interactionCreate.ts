@@ -63,6 +63,21 @@ export async function execute(
         if (manageCommand.handleAddServerModal) {
           await manageCommand.handleAddServerModal(interaction, client);
         }
+      } else if (interaction.customId === 'interval_modal') {
+        const manageCommand = await import('../commands/manage');
+        if (manageCommand.handleIntervalModal) {
+          await manageCommand.handleIntervalModal(interaction, client);
+        }
+      } else if (interaction.customId === 'images_banner_modal') {
+        const manageCommand = await import('../commands/manage');
+        if (manageCommand.handleBannerModal) {
+          await manageCommand.handleBannerModal(interaction, client);
+        }
+      } else if (interaction.customId === 'images_logo_modal') {
+        const manageCommand = await import('../commands/manage');
+        if (manageCommand.handleLogoModal) {
+          await manageCommand.handleLogoModal(interaction, client);
+        }
       }
     } catch (error) {
       console.error('Error handling modal submission:', error);

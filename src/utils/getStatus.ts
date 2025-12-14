@@ -93,7 +93,16 @@ export async function getStatus(
 
     embed.setTitle(statusTitle);
 
-    if (isOpenMP) {
+    // Check for custom banner/logo first (overrides server defaults)
+    if (server.customBanner) {
+      embed.setImage(server.customBanner);
+    }
+    if (server.customLogo) {
+      embed.setThumbnail(server.customLogo);
+    }
+
+    // Only use open.mp banner/logo if custom ones are not set
+    if (isOpenMP && !server.customBanner && !server.customLogo) {
       try {
         const extraInfo = await sampQuery.getOpenMPExtraInfo(
           server,
@@ -101,13 +110,35 @@ export async function getStatus(
           isMonitoring
         );
         if (extraInfo) {
-          if (extraInfo.darkBanner) {
+          if (extraInfo.darkBanner && !server.customBanner) {
             embed.setImage(extraInfo.darkBanner);
-          } else if (extraInfo.lightBanner) {
+          } else if (extraInfo.lightBanner && !server.customBanner) {
             embed.setImage(extraInfo.lightBanner);
           }
 
-          if (extraInfo.logo) {
+          if (extraInfo.logo && !server.customLogo) {
+            embed.setThumbnail(extraInfo.logo);
+          }
+        }
+      } catch (error) {
+        console.log('Could not fetch open.mp extra info:', error);
+      }
+    } else if (isOpenMP && (server.customBanner || server.customLogo)) {
+      // Fetch open.mp info but don't override custom images
+      try {
+        const extraInfo = await sampQuery.getOpenMPExtraInfo(
+          server,
+          guildId,
+          isMonitoring
+        );
+        if (extraInfo) {
+          if (extraInfo.darkBanner && !server.customBanner) {
+            embed.setImage(extraInfo.darkBanner);
+          } else if (extraInfo.lightBanner && !server.customBanner) {
+            embed.setImage(extraInfo.lightBanner);
+          }
+
+          if (extraInfo.logo && !server.customLogo) {
             embed.setThumbnail(extraInfo.logo);
           }
         }

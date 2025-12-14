@@ -399,7 +399,8 @@ export async function execute(client: CustomClient): Promise<void> {
               );
             }
 
-            interval.next = now + 120000;
+            const intervalMinutes = interval.updateIntervalMinutes || 2;
+            interval.next = now + intervalMinutes * 60000;
           }
 
           if (voiceUpdateDue && interval.playerCountChannel) {
@@ -632,7 +633,8 @@ export async function execute(client: CustomClient): Promise<void> {
             );
           }
 
-          interval.next = now + 120000;
+          const intervalMinutes = interval.updateIntervalMinutes || 2;
+          interval.next = now + intervalMinutes * 60000;
         }
 
         if (voiceUpdateDue && interval.playerCountChannel) {
@@ -744,7 +746,7 @@ export async function execute(client: CustomClient): Promise<void> {
         console.error(`Error processing guild ${guild.name}:`, error);
       }
     }
-  }, 60000);
+  }, 120000); // 2 minutes - reduced from 1 min to avoid server-side rate limiting
 
   function msUntilMidnight(): number {
     const now = new Date();

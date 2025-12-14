@@ -9,6 +9,8 @@ export interface ServerConfig {
   port: number;
   addedAt: number;
   addedBy: string;
+  customBanner?: string; // Custom banner image URL (overrides open.mp banner)
+  customLogo?: string; // Custom logo image URL (overrides open.mp logo)
 }
 
 export interface SimpleServer {
@@ -31,6 +33,7 @@ export interface IntervalConfig {
   preferredLanguage?: 'en' | 'pt' | 'es';
   lastVoiceUpdate?: number;
   statusTheme?: 'classic' | 'detailed';
+  updateIntervalMinutes?: number; // Custom monitoring interval in minutes (2-30)
 }
 
 export interface PlayerCountResult {

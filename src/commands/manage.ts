@@ -126,6 +126,11 @@ export async function showManagePanel(
       .setLabel('Theme')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
+      .setCustomId('manage_images')
+      .setLabel('Custom Images')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(!intervalConfig?.activeServerId),
+    new ButtonBuilder()
       .setCustomId('manage_status')
       .setLabel('View Status')
       .setStyle(ButtonStyle.Secondary)
@@ -178,6 +183,18 @@ export async function handleManageButton(
     case 'manage_status':
       await handleStatusButton(interaction, client);
       break;
+    case 'manage_images':
+      await handleImagesButton(interaction, client);
+      break;
+    case 'manage_images_banner':
+      await handleImagesBannerButton(interaction);
+      break;
+    case 'manage_images_logo':
+      await handleImagesLogoButton(interaction);
+      break;
+    case 'manage_images_clear':
+      await handleImagesClearButton(interaction, client);
+      break;
     case 'manage_back':
       await showManagePanel(interaction, client);
       break;
@@ -200,6 +217,9 @@ export async function handleManageButton(
       break;
     case 'manage_voice_style':
       await handleVoiceStyleToggleButton(interaction, client);
+      break;
+    case 'manage_interval':
+      await handleIntervalButton(interaction, client);
       break;
     // Role management
     case 'manage_role_set':
@@ -365,6 +385,11 @@ async function renderMonitoringPanel(
         name: 'Voice Channel Style',
         value: voiceStyleLabel,
         inline: false,
+      },
+      {
+        name: 'Update Interval',
+        value: `${intervalConfig?.updateIntervalMinutes || 2} minutes`,
+        inline: false,
       }
     );
   }
@@ -385,7 +410,12 @@ async function renderMonitoringPanel(
     new ButtonBuilder()
       .setCustomId('manage_voice_style')
       .setLabel(voiceStyle === 'emoji' ? 'Use Text Labels' : 'Use Emoji Labels')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('manage_interval')
+      .setLabel('Set Interval')
       .setStyle(ButtonStyle.Secondary)
+      .setDisabled(!activeServer)
   );
 
   const backRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -576,6 +606,152 @@ async function renderThemePanel(
       components: [actionRow, backRow],
     });
   }
+}
+
+async function handleImagesButton(
+  interaction: ButtonInteraction,
+  client: CustomClient
+): Promise<void> {
+  const servers = (await client.servers.get(interaction.guildId!)) || [];
+  const intervalConfig = await client.intervals.get(interaction.guildId!);
+  const activeServer = servers.find(
+    s => s.id === intervalConfig?.activeServerId
+  );
+
+  if (!activeServer) {
+    await interaction.reply({
+      content: 'No active server found.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0x9b59b6)
+    .setTitle('Custom Images')
+    .setDescription(
+      `Configure custom banner and logo for **${activeServer.name}**\n\n` +
+        '**Note:** Custom images will override open.mp banner and logo if the server has them.'
+    )
+    .addFields(
+      {
+        name: 'Current Banner',
+        value: activeServer.customBanner || 'Not set (using server default)',
+        inline: false,
+      },
+      {
+        name: 'Current Logo',
+        value: activeServer.customLogo || 'Not set (using server default)',
+        inline: false,
+      }
+    )
+    .setTimestamp();
+
+  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('manage_images_banner')
+      .setLabel('Set Banner')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId('manage_images_logo')
+      .setLabel('Set Logo')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId('manage_images_clear')
+      .setLabel('Clear All')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(!activeServer.customBanner && !activeServer.customLogo)
+  );
+
+  const backRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('manage_back')
+      .setLabel('Back')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  await interaction.update({
+    embeds: [embed],
+    components: [actionRow, backRow],
+  });
+}
+
+async function handleImagesBannerButton(
+  interaction: ButtonInteraction
+): Promise<void> {
+  const modal = new ModalBuilder()
+    .setCustomId('images_banner_modal')
+    .setTitle('Set Custom Banner');
+
+  const urlInput = new TextInputBuilder()
+    .setCustomId('banner_url')
+    .setLabel('Banner Image URL')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('https://example.com/banner.png')
+    .setRequired(true);
+
+  const row = new ActionRowBuilder<TextInputBuilder>().addComponents(urlInput);
+  modal.addComponents(row);
+
+  await interaction.showModal(modal);
+}
+
+async function handleImagesLogoButton(
+  interaction: ButtonInteraction
+): Promise<void> {
+  const modal = new ModalBuilder()
+    .setCustomId('images_logo_modal')
+    .setTitle('Set Custom Logo');
+
+  const urlInput = new TextInputBuilder()
+    .setCustomId('logo_url')
+    .setLabel('Logo Image URL')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('https://example.com/logo.png')
+    .setRequired(true);
+
+  const row = new ActionRowBuilder<TextInputBuilder>().addComponents(urlInput);
+  modal.addComponents(row);
+
+  await interaction.showModal(modal);
+}
+
+async function handleImagesClearButton(
+  interaction: ButtonInteraction,
+  client: CustomClient
+): Promise<void> {
+  const servers = (await client.servers.get(interaction.guildId!)) || [];
+  const intervalConfig = await client.intervals.get(interaction.guildId!);
+  const activeServer = servers.find(
+    s => s.id === intervalConfig?.activeServerId
+  );
+
+  if (!activeServer) {
+    await interaction.reply({
+      content: 'No active server found.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  delete activeServer.customBanner;
+  delete activeServer.customLogo;
+
+  await client.servers.set(interaction.guildId!, servers);
+
+  let guildConfig = client.guildConfigs.get(interaction.guildId!) || {
+    servers: [],
+    interval: intervalConfig,
+  };
+  guildConfig.servers = servers;
+  client.guildConfigs.set(interaction.guildId!, guildConfig);
+
+  await interaction.reply({
+    content: '✅ Custom images cleared. Server will now use default images.',
+    flags: MessageFlags.Ephemeral,
+  });
+
+  await handleImagesButton(interaction, client);
 }
 
 async function handleStatusButton(
@@ -870,6 +1046,163 @@ async function handleVoiceStyleToggleButton(
         ? 'Voice channel labels will now use emoji icons (👥 / 🔗).'
         : 'Voice channel labels will now use text labels.',
     flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleIntervalButton(
+  interaction: ButtonInteraction,
+  _client: CustomClient
+): Promise<void> {
+  const modal = new ModalBuilder()
+    .setCustomId('interval_modal')
+    .setTitle('Set Update Interval');
+
+  const intervalInput = new TextInputBuilder()
+    .setCustomId('interval_minutes')
+    .setLabel('Update interval in minutes (2-30)')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('2')
+    .setMinLength(1)
+    .setMaxLength(2)
+    .setRequired(true);
+
+  const row = new ActionRowBuilder<TextInputBuilder>().addComponents(
+    intervalInput
+  );
+
+  modal.addComponents(row);
+
+  await interaction.showModal(modal);
+}
+
+export async function handleIntervalModal(
+  interaction: ModalSubmitInteraction,
+  client: CustomClient
+): Promise<void> {
+  await interaction.deferReply({ ephemeral: true });
+
+  const minutesInput = interaction.fields
+    .getTextInputValue('interval_minutes')
+    .trim();
+  const minutes = parseInt(minutesInput, 10);
+
+  if (isNaN(minutes) || minutes < 2 || minutes > 30) {
+    await interaction.editReply({
+      content:
+        'Invalid interval. Please enter a number between 2 and 30 minutes.',
+    });
+    return;
+  }
+
+  let intervalConfig = await client.intervals.get(interaction.guildId!);
+
+  if (!intervalConfig) {
+    intervalConfig = {
+      enabled: false,
+      next: Date.now(),
+      statusMessage: null,
+    };
+  }
+
+  intervalConfig.updateIntervalMinutes = minutes;
+  await client.intervals.set(interaction.guildId!, intervalConfig);
+
+  let guildConfig = client.guildConfigs.get(interaction.guildId!) || {
+    servers: [],
+  };
+  guildConfig.interval = intervalConfig;
+  client.guildConfigs.set(interaction.guildId!, guildConfig);
+
+  await interaction.editReply({
+    content: `✅ Update interval set to **${minutes} minutes**.\n\nThe bot will now query your server every ${minutes} minutes.`,
+  });
+}
+
+export async function handleBannerModal(
+  interaction: ModalSubmitInteraction,
+  client: CustomClient
+): Promise<void> {
+  await interaction.deferReply({ ephemeral: true });
+
+  const urlInput = interaction.fields.getTextInputValue('banner_url').trim();
+
+  // Basic URL validation
+  if (!urlInput.startsWith('http://') && !urlInput.startsWith('https://')) {
+    await interaction.editReply({
+      content: 'Invalid URL. Please provide a valid HTTP or HTTPS URL.',
+    });
+    return;
+  }
+
+  const servers = (await client.servers.get(interaction.guildId!)) || [];
+  const intervalConfig = await client.intervals.get(interaction.guildId!);
+  const activeServer = servers.find(
+    s => s.id === intervalConfig?.activeServerId
+  );
+
+  if (!activeServer) {
+    await interaction.editReply({
+      content: 'No active server found.',
+    });
+    return;
+  }
+
+  activeServer.customBanner = urlInput;
+  await client.servers.set(interaction.guildId!, servers);
+
+  let guildConfig = client.guildConfigs.get(interaction.guildId!) || {
+    servers: [],
+    interval: intervalConfig,
+  };
+  guildConfig.servers = servers;
+  client.guildConfigs.set(interaction.guildId!, guildConfig);
+
+  await interaction.editReply({
+    content: `✅ Custom banner set successfully!\n\n**URL:** ${urlInput}\n\nThe banner will appear in your status embed on the next update.`,
+  });
+}
+
+export async function handleLogoModal(
+  interaction: ModalSubmitInteraction,
+  client: CustomClient
+): Promise<void> {
+  await interaction.deferReply({ ephemeral: true });
+
+  const urlInput = interaction.fields.getTextInputValue('logo_url').trim();
+
+  // Basic URL validation
+  if (!urlInput.startsWith('http://') && !urlInput.startsWith('https://')) {
+    await interaction.editReply({
+      content: 'Invalid URL. Please provide a valid HTTP or HTTPS URL.',
+    });
+    return;
+  }
+
+  const servers = (await client.servers.get(interaction.guildId!)) || [];
+  const intervalConfig = await client.intervals.get(interaction.guildId!);
+  const activeServer = servers.find(
+    s => s.id === intervalConfig?.activeServerId
+  );
+
+  if (!activeServer) {
+    await interaction.editReply({
+      content: 'No active server found.',
+    });
+    return;
+  }
+
+  activeServer.customLogo = urlInput;
+  await client.servers.set(interaction.guildId!, servers);
+
+  let guildConfig = client.guildConfigs.get(interaction.guildId!) || {
+    servers: [],
+    interval: intervalConfig,
+  };
+  guildConfig.servers = servers;
+  client.guildConfigs.set(interaction.guildId!, guildConfig);
+
+  await interaction.editReply({
+    content: `✅ Custom logo set successfully!\n\n**URL:** ${urlInput}\n\nThe logo will appear in your status embed on the next update.`,
   });
 }
 

@@ -68,7 +68,7 @@ export class SAMPQuery {
     { count: number; lastFailure: number; type?: string }
   >();
   private readonly MAX_CONSECUTIVE_FAILURES = 5;
-  private readonly FAILURE_RESET_TIME = 300000; // 5 minutes
+  private readonly FAILURE_RESET_TIME = 1800000; // 30 minutes
 
   private recordFailure(serverKey: string, errorType: string): void {
     const existing = this.failureTracker.get(serverKey);

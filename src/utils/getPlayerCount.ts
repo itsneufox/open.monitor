@@ -97,6 +97,28 @@ export async function getPlayerCount(
     const info = await sampQuery.getServerInfo(server, guildId, isMonitoring);
 
     if (!info) {
+      // Try to use cached data on timeout/failure
+      try {
+        const { client: valkey } = await import('./valkey');
+        const cachedInfo = await valkey.get(cacheKey);
+        if (cachedInfo) {
+          const data = JSON.parse(cachedInfo as string);
+          console.log(
+            `Using cached data for ${server.ip}:${server.port} after query failure`
+          );
+          return {
+            playerCount: data.players || 0,
+            maxPlayers: data.maxPlayers || 100,
+            name: data.name || server.name,
+            isOnline: true,
+            isCached: true,
+            error: 'Query timeout - showing cached data',
+          };
+        }
+      } catch {
+        console.log('No cached data available after query failure');
+      }
+
       return {
         playerCount: 0,
         maxPlayers: 100,
