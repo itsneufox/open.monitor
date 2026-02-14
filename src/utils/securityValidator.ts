@@ -36,9 +36,6 @@ class SecurityValidator {
     ['178.63.13.150', 'Permanently banned for severe ToS violations'],
     ['178.32.234.17', 'Permanently banned for severe ToS violations'],
     ['178.32.234.18', 'Permanently banned for severe ToS violations'],
-    ['tws.thatwarserver.com', 'Permanently banned for severe ToS violations'],
-    ['thatwarserver.com', 'Permanently banned for severe ToS violations'],
-    ['149.56.45.135', 'Permanently banned for severe ToS violations'],
     ['104.131.210.159', 'Permanently banned for severe ToS violations'],
   ]);
 
