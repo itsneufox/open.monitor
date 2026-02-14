@@ -1,6 +1,6 @@
 # Privacy Policy for open.monitor Discord Bot
 
-**Last Updated: January 15, 2025**
+**Last Updated: January 01, 2026**
 
 This Privacy Policy explains how the open.monitor Discord bot ("Bot," "Service," "we," "us," or "our") collects, uses, stores, and shares information when you invite or use the Bot.
 
