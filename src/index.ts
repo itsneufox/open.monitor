@@ -4,10 +4,17 @@ import fs from 'fs';
 import path from 'path';
 import Keyv from 'keyv';
 import KeyvMysql from '@keyv/mysql';
-import { CustomClient } from './types';
+import {
+  ChartData,
+  CustomClient,
+  IntervalConfig,
+  ServerConfig,
+  UptimeStats,
+} from './types';
 import { RateLimitManager } from './utils/rateLimitManager';
 import { WebhookLogger } from './utils/webhookLogger';
 import { SecurityValidator } from './utils/securityValidator';
+import { retryDatabaseOperation } from './utils/databaseReliability';
 
 config();
 
@@ -33,12 +40,17 @@ client.rateLimitManager = new RateLimitManager();
 SecurityValidator.setClient(client);
 
 try {
-  const mysqlAdapter = new KeyvMysql(process.env.DATABASE_URL!);
+  const createDatabase = <Value>(namespace: string): Keyv<Value> =>
+    new Keyv<Value>({
+      store: new KeyvMysql(process.env.DATABASE_URL!),
+      namespace,
+      throwOnErrors: true,
+    });
 
-  const intervals = new Keyv({ store: mysqlAdapter, namespace: 'intervals' });
-  const servers = new Keyv({ store: mysqlAdapter, namespace: 'servers' });
-  const maxPlayers = new Keyv({ store: mysqlAdapter, namespace: 'maxplayers' });
-  const uptimes = new Keyv({ store: mysqlAdapter, namespace: 'uptimes' });
+  const intervals = createDatabase<IntervalConfig>('intervals');
+  const servers = createDatabase<ServerConfig[]>('servers');
+  const maxPlayers = createDatabase<ChartData>('maxplayers');
+  const uptimes = createDatabase<UptimeStats>('uptimes');
 
   const databases = { intervals, servers, maxPlayers, uptimes };
   Object.entries(databases).forEach(([name, db]) => {
@@ -51,7 +63,7 @@ try {
   client.uptimes = uptimes;
   client.guildConfigs = new Collection();
 
-  console.log('MySQL database connections established');
+  console.log('MySQL database clients initialized');
 } catch (error) {
   console.error('Failed to connect to MySQL database:', error);
   process.exit(1);
@@ -290,9 +302,29 @@ process.on('uncaughtException', async error => {
   process.exit(1);
 });
 
-client
-  .login(process.env.TOKEN)
-  .then(async () => {
+async function startBot(): Promise<void> {
+  try {
+    await retryDatabaseOperation(
+      async () => {
+        await Promise.all([
+          client.intervals.get('__healthcheck__'),
+          client.servers.get('__healthcheck__'),
+          client.maxPlayers.get('__healthcheck__'),
+          client.uptimes.get('__healthcheck__'),
+        ]);
+      },
+      'verifying the MySQL connection',
+      3
+    );
+    console.log('MySQL database connection verified');
+  } catch (error) {
+    console.error('Failed to verify MySQL database connection:', error);
+    process.exit(1);
+  }
+
+  try {
+    await client.login(process.env.TOKEN);
+
     try {
       const { valkeyReady } = await import('./utils/valkey');
       await valkeyReady;
@@ -300,10 +332,12 @@ client
     } catch {
       console.warn('Valkey not available, continuing without cache');
     }
-  })
-  .catch((error: Error) => {
+  } catch (error) {
     console.error('Failed to login to Discord:', error);
     process.exit(1);
-  });
+  }
+}
+
+void startBot();
 
 export default commands;

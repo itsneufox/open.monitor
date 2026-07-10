@@ -6,6 +6,7 @@ import {
 } from 'discord.js';
 import { getChart, getRoleColor } from '../utils';
 import { CustomClient, ChartData, getServerDataKey } from '../types';
+import { getGuildServers } from '../utils/databaseReliability';
 
 export const data = new SlashCommandBuilder()
   .setName('chart')
@@ -31,7 +32,7 @@ export async function execute(
     return;
   }
 
-  const servers = (await client.servers.get(interaction.guildId)) || [];
+  const servers = await getGuildServers(client, interaction.guildId);
   if (servers.length === 0) {
     const embed = new EmbedBuilder()
       .setColor(0xff6b6b)

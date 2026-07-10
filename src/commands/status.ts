@@ -6,6 +6,7 @@ import {
 import { CustomClient, ServerConfig } from '../types';
 import { InputValidator } from '../utils/inputValidator';
 import { getStatus, getRoleColor } from '../utils';
+import { getGuildServers } from '../utils/databaseReliability';
 
 export const data = new SlashCommandBuilder()
   .setName('status')
@@ -41,7 +42,7 @@ export async function execute(
   }
 
   const guildId = interaction.guildId!;
-  const servers = (await client.servers.get(guildId)) || [];
+  const servers = await getGuildServers(client, guildId);
 
   if (servers.length === 0) {
     const embed = new EmbedBuilder()

@@ -11,6 +11,7 @@ import {
 import { CustomClient } from '../types';
 import { getRoleColor } from '../utils';
 import { SAMPQuery } from '../utils/sampQuery';
+import { getGuildServers } from '../utils/databaseReliability';
 
 const sampQuery = new SAMPQuery();
 
@@ -44,7 +45,7 @@ export async function execute(
     `[players command] guildId: ${interaction.guildId}, user: ${interaction.user.tag}`
   );
 
-  const servers = (await client.servers.get(interaction.guildId)) || [];
+  const servers = await getGuildServers(client, interaction.guildId);
   if (servers.length === 0) {
     const embed = new EmbedBuilder()
       .setColor(0xff6b6b)

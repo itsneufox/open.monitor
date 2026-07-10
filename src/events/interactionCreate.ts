@@ -1,5 +1,6 @@
 import { Events, Interaction, MessageFlags } from 'discord.js';
 import { CustomClient } from '../types';
+import { isDatabaseUnavailableError } from '../utils/databaseReliability';
 
 export const name = Events.InteractionCreate;
 export const once = false;
@@ -24,10 +25,14 @@ export async function execute(
         error
       );
 
-      const errorMessage = 'There was an error while executing this command!';
+      const errorMessage = isDatabaseUnavailableError(error)
+        ? '❌ The database is temporarily unavailable. Your server configuration has not been removed. Please try again shortly.'
+        : 'There was an error while executing this command!';
 
       try {
-        if (interaction.replied || interaction.deferred) {
+        if (interaction.deferred && !interaction.replied) {
+          await interaction.editReply({ content: errorMessage });
+        } else if (interaction.replied) {
           await interaction.followUp({
             content: errorMessage,
             flags: MessageFlags.Ephemeral,
