@@ -311,10 +311,13 @@ class SecurityValidator {
     failureCount: number
   ): Promise<void> {
     try {
-      if (guildId !== '1309527094476275782') return;
+      const configuredGuildId = process.env.SECURITY_LOG_GUILD_ID;
+      const channelId = process.env.SECURITY_LOG_CHANNEL_ID;
+
+      if (!configuredGuildId || !channelId) return;
+      if (guildId !== configuredGuildId) return;
       if (!this.discordClient?.channels) return;
 
-      const channelId = '1405066715687026718';
       const channel = await this.discordClient.channels
         .fetch(channelId)
         .catch(() => null);

@@ -183,7 +183,7 @@ const rest = new REST().setToken(process.env.TOKEN!);
     );
 
     // Register guild-specific commands
-    const ownerGuildId = '1409643885726138380';
+    const ownerGuildId = process.env.OWNER_GUILD_ID;
     const guildCommands: Array<unknown> = [];
 
     type SlashCommandData = { toJSON: () => unknown };
@@ -196,7 +196,7 @@ const rest = new REST().setToken(process.env.TOKEN!);
       }
     }
 
-    if (guildCommands.length > 0) {
+    if (guildCommands.length > 0 && ownerGuildId) {
       console.log(
         `Registering ${guildCommands.length} owner-only commands to guild ${ownerGuildId}...`
       );
@@ -206,6 +206,10 @@ const rest = new REST().setToken(process.env.TOKEN!);
       )) as Array<Record<string, unknown>>;
       console.log(
         `Successfully reloaded ${guildData.length} guild-specific commands.`
+      );
+    } else if (guildCommands.length > 0) {
+      console.warn(
+        'OWNER_GUILD_ID is not configured; owner-only commands were not registered.'
       );
     }
   } catch (error) {
@@ -324,14 +328,7 @@ async function startBot(): Promise<void> {
 
   try {
     await client.login(process.env.TOKEN);
-
-    try {
-      const { valkeyReady } = await import('./utils/valkey');
-      await valkeyReady;
-      console.log('All systems ready!');
-    } catch {
-      console.warn('Valkey not available, continuing without cache');
-    }
+    console.log('All systems ready!');
   } catch (error) {
     console.error('Failed to login to Discord:', error);
     process.exit(1);

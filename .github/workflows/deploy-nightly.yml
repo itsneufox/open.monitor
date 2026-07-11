@@ -93,14 +93,14 @@ jobs:
         echo "CLIENT_ID=${{ secrets.DISCORD_NIGHTLY_CLIENT_ID }}" >> .env
         echo "DATABASE_URL=${{ secrets.NIGHTLY_DATABASE_URL }}" >> .env
         echo "OWNER_ID=${{ secrets.OWNER_ID }}" >> .env
+        echo "OWNER_GUILD_ID=${{ secrets.OWNER_GUILD_ID }}" >> .env
         echo "NODE_ENV=development" >> .env
         echo "LOG_LEVEL=debug" >> .env
         echo "BOT_VERSION=${NIGHTLY_VERSION:-nightly}" >> .env
         echo "MYSQL_ROOT_PASSWORD=${{ secrets.NIGHTLY_MYSQL_ROOT_PASSWORD }}" >> .env
         echo "MYSQL_PASSWORD=${{ secrets.NIGHTLY_MYSQL_PASSWORD }}" >> .env
-        echo "VALKEY_HOSTS=valkey-nightly:6379" >> .env
-        echo "VALKEY_USE_TLS=false" >> .env
-        echo "VALKEY_KEY_EXPIRY_SECONDS=300" >> .env
+        echo "SECURITY_LOG_GUILD_ID=${{ secrets.SECURITY_LOG_GUILD_ID }}" >> .env
+        echo "SECURITY_LOG_CHANNEL_ID=${{ secrets.SECURITY_LOG_CHANNEL_ID }}" >> .env
         
         echo "=== Checking if .env was created ==="
         if [ -f .env ]; then

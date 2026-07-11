@@ -21,22 +21,6 @@ services:
       retries: 10
       start_period: 60s
 
-  valkey:
-    image: valkey/valkey:8.1.3-alpine
-    container_name: openmonitor-valkey
-    restart: unless-stopped
-    volumes:
-      - ./conf/valkey.conf:/etc/valkey/valkey.conf
-      - valkey_data:/data
-    command: ["valkey-server", "/etc/valkey/valkey.conf"]
-    networks:
-      - openmonitor-network
-    healthcheck:
-      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
   bot:
     build: .
     container_name: openmonitor-bot
@@ -44,19 +28,17 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-      valkey:
-        condition: service_healthy
     environment:
       - TOKEN=${TOKEN}
       - CLIENT_ID=${CLIENT_ID}
       - DATABASE_URL=mysql://openmonitor:${MYSQL_PASSWORD}@mysql:3306/openmonitor
       - OWNER_ID=${OWNER_ID}
+      - OWNER_GUILD_ID=${OWNER_GUILD_ID:-}
       - NODE_ENV=production
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - VALKEY_HOSTS=valkey:6379
-      - VALKEY_USE_TLS=false
-      - VALKEY_KEY_EXPIRY_SECONDS=${VALKEY_KEY_EXPIRY_SECONDS:-300}
       - WEBHOOK_LOG_URL=${WEBHOOK_LOG_URL}
+      - SECURITY_LOG_GUILD_ID=${SECURITY_LOG_GUILD_ID:-}
+      - SECURITY_LOG_CHANNEL_ID=${SECURITY_LOG_CHANNEL_ID:-}
     volumes:
       - ./logs:/app/logs
     networks:
@@ -64,10 +46,50 @@ services:
     labels:
       - discord-logger.enabled=true
 
+  backup:
+    profiles: ["backup"]
+    build:
+      context: ./docker/backup
+    container_name: openmonitor-backup
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_DATABASE=openmonitor
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - R2_ENDPOINT=${R2_ENDPOINT}
+      - R2_BUCKET=${R2_BUCKET}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - BACKUP_PREFIX=${BACKUP_PREFIX:-mysql/production}
+      - BACKUP_INTERVAL_SECONDS=${BACKUP_INTERVAL_SECONDS:-86400}
+      - BACKUP_RETRY_SECONDS=${BACKUP_RETRY_SECONDS:-300}
+      - XDG_CONFIG_HOME=/tmp/config
+      - XDG_CACHE_HOME=/tmp/cache
+    volumes:
+      - backup_staging:/backups
+    networks:
+      - openmonitor-network
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/last-backup-success && { test ! -f /tmp/last-backup-failure || test /tmp/last-backup-success -nt /tmp/last-backup-failure; }"]
+      interval: 5m
+      timeout: 5s
+      retries: 1
+      start_period: 15m
+
 volumes:
   mysql_data:
     driver: local
-  valkey_data:
+  backup_staging:
     driver: local
 
 networks:

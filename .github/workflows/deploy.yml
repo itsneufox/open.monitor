@@ -105,14 +105,14 @@ jobs:
         CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
         DATABASE_URL=${{ secrets.DATABASE_URL }}
         OWNER_ID=${{ secrets.OWNER_ID }}
+        OWNER_GUILD_ID=${{ secrets.OWNER_GUILD_ID }}
         NODE_ENV=production
         LOG_LEVEL=info
         BOT_VERSION=${NEW_VERSION:-latest}
         MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
         MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
-        VALKEY_HOSTS=valkey:6379
-        VALKEY_USE_TLS=false
-        VALKEY_KEY_EXPIRY_SECONDS=540
+        SECURITY_LOG_GUILD_ID=${{ secrets.SECURITY_LOG_GUILD_ID }}
+        SECURITY_LOG_CHANNEL_ID=${{ secrets.SECURITY_LOG_CHANNEL_ID }}
         EOF
 
     - name: Deploy application

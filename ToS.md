@@ -68,7 +68,8 @@ We use collected data to:
 
 ### 3.3 Data Storage and Retention
 - Data is stored in secure MySQL databases
-- Cached data is stored in Valkey/Redis with automatic expiration
+- Encrypted off-site database backups are stored in a private Cloudflare R2 bucket
+- Cached server status data is stored temporarily in application memory
 - Historical data (charts, uptime) is retained for functionality purposes
 - Data is automatically cleaned up after periods of inactivity
 - We implement database encryption and access controls
@@ -79,7 +80,8 @@ We use collected data to:
 - Uptime statistics: Retained while server is configured + 90 days
 - Rate limiting data: 24 hours for security analysis
 - Error logs: 7 days for troubleshooting
-- Cached data: Automatic expiration (60 seconds to 24 hours)
+- Database backups: 30 days
+- Cached server status data: Automatic expiration (60 seconds to 10 minutes)
 - Inactive guild data: Automatically cleaned after 30 days of inactivity
 
 ## 4. Rate Limiting and Abuse Prevention

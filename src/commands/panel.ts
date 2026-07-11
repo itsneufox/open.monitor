@@ -18,7 +18,7 @@ export const data = new SlashCommandBuilder()
   .setDefaultMemberPermissions(null)
   .setDMPermission(false);
 
-export const guildOnly = '1409643885726138380'; // Owner guild only
+export const guildOnly = true;
 
 export async function execute(
   interaction: ChatInputCommandInteraction,

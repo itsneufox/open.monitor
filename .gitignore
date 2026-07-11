@@ -99,8 +99,8 @@ Thumbs.db
 
 # Backup files
 *.bak
-backup/
-backups/
+/backup/
+/backups/
 
 # Temporary files
 tmp/

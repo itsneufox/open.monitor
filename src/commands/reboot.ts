@@ -11,7 +11,7 @@ export const data = new SlashCommandBuilder()
   .setDescription('Restart the bot (Owner only)')
   .setDefaultMemberPermissions(null); // Hidden from non-admins
 
-export const guildOnly = '1409643885726138380'; // Owner guild only
+export const guildOnly = true;
 
 export async function execute(
   interaction: ChatInputCommandInteraction,

@@ -50,6 +50,12 @@ Owner-only:
 - Voice channels: Every 2 minutes  
 - Charts: Daily at midnight
 
+## Backups
+
+An optional Docker Compose profile creates daily compressed MySQL backups and
+uploads them to a private Cloudflare R2 bucket. See
+[docs/backups.md](docs/backups.md) for setup, verification, and restore steps.
+
 ## Bot Permissions
 
 The bot needs:

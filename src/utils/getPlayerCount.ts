@@ -1,4 +1,9 @@
 import { ServerConfig, getServerDataKey } from '../types';
+import {
+  type CachedPlayerInfo,
+  getCachedPlayerInfo,
+  setCachedPlayerInfo,
+} from './playerCountCache';
 import { SAMPQuery } from './sampQuery';
 
 interface PlayerCountResult {
@@ -11,6 +16,21 @@ interface PlayerCountResult {
 }
 
 const sampQuery = new SAMPQuery();
+
+function createCachedResult(
+  cachedInfo: CachedPlayerInfo,
+  server: ServerConfig,
+  error?: string
+): PlayerCountResult {
+  return {
+    playerCount: cachedInfo.players || 0,
+    maxPlayers: cachedInfo.maxPlayers || 100,
+    name: cachedInfo.name || server.name,
+    isOnline: true,
+    isCached: true,
+    ...(error ? { error } : {}),
+  };
+}
 
 export async function getPlayerCount(
   server: ServerConfig,
@@ -26,21 +46,9 @@ export async function getPlayerCount(
     const cacheKey = getServerDataKey(guildId, server.id);
 
     if (!ignoreCache) {
-      try {
-        const { client: valkey } = await import('./valkey');
-        const cachedInfo = await valkey.get(cacheKey);
-        if (cachedInfo) {
-          const info = JSON.parse(cachedInfo as string);
-          return {
-            playerCount: info.players || 0,
-            maxPlayers: info.maxPlayers || 100,
-            name: info.name || server.name,
-            isOnline: true,
-            isCached: true,
-          };
-        }
-      } catch {
-        console.log('Cache unavailable, querying server directly');
+      const cachedInfo = getCachedPlayerInfo(cacheKey);
+      if (cachedInfo) {
+        return createCachedResult(cachedInfo, server);
       }
     }
 
@@ -66,22 +74,13 @@ export async function getPlayerCount(
     if (!SecurityValidator.canQueryIP(server.ip, guildId, isMonitoring)) {
       console.warn(`Rate limited for ${server.ip}, trying cached data`);
 
-      try {
-        const { client: valkey } = await import('./valkey');
-        const cachedInfo = await valkey.get(cacheKey);
-        if (cachedInfo) {
-          const info = JSON.parse(cachedInfo as string);
-          return {
-            playerCount: info.players || 0,
-            maxPlayers: info.maxPlayers || 100,
-            name: info.name || server.name,
-            isOnline: true,
-            isCached: true,
-            error: 'Rate limited - showing cached data',
-          };
-        }
-      } catch {
-        console.log('No cached data available during rate limit');
+      const cachedInfo = getCachedPlayerInfo(cacheKey);
+      if (cachedInfo) {
+        return createCachedResult(
+          cachedInfo,
+          server,
+          'Rate limited - showing cached data'
+        );
       }
 
       return {
@@ -98,25 +97,16 @@ export async function getPlayerCount(
 
     if (!info) {
       // Try to use cached data on timeout/failure
-      try {
-        const { client: valkey } = await import('./valkey');
-        const cachedInfo = await valkey.get(cacheKey);
-        if (cachedInfo) {
-          const data = JSON.parse(cachedInfo as string);
-          console.log(
-            `Using cached data for ${server.ip}:${server.port} after query failure`
-          );
-          return {
-            playerCount: data.players || 0,
-            maxPlayers: data.maxPlayers || 100,
-            name: data.name || server.name,
-            isOnline: true,
-            isCached: true,
-            error: 'Query timeout - showing cached data',
-          };
-        }
-      } catch {
-        console.log('No cached data available after query failure');
+      const cachedInfo = getCachedPlayerInfo(cacheKey);
+      if (cachedInfo) {
+        console.log(
+          `Using cached data for ${server.ip}:${server.port} after query failure`
+        );
+        return createCachedResult(
+          cachedInfo,
+          server,
+          'Query timeout - showing cached data'
+        );
       }
 
       return {
@@ -136,50 +126,30 @@ export async function getPlayerCount(
       isCached: false,
     };
 
-    try {
-      const { client: valkey } = await import('./valkey');
-      const { TimeUnit } = await import('@valkey/valkey-glide');
-
-      const cacheTime = isMonitoring ? 600 : 60;
-
-      await valkey.set(
-        cacheKey,
-        JSON.stringify({
-          players: result.playerCount,
-          maxPlayers: result.maxPlayers,
-          name: result.name,
-        }),
-        {
-          expiry: {
-            type: TimeUnit.Seconds,
-            count: cacheTime,
-          },
-        }
-      );
-    } catch {
-      console.log('Failed to cache player data');
-    }
+    const cacheTime = isMonitoring ? 600 : 60;
+    setCachedPlayerInfo(
+      cacheKey,
+      {
+        players: result.playerCount,
+        maxPlayers: result.maxPlayers,
+        name: result.name,
+      },
+      cacheTime
+    );
 
     return result;
   } catch (error) {
     console.error('Error getting player count:', error);
 
-    try {
-      const { client: valkey } = await import('./valkey');
-      const cachedInfo = await valkey.get(getServerDataKey(guildId, server.id));
-      if (cachedInfo) {
-        const info = JSON.parse(cachedInfo as string);
-        return {
-          playerCount: info.players || 0,
-          maxPlayers: info.maxPlayers || 100,
-          name: info.name || server.name,
-          isOnline: true,
-          isCached: true,
-          error: 'Error occurred - showing cached data',
-        };
-      }
-    } catch {
-      console.log('No cached data available during error');
+    const cachedInfo = getCachedPlayerInfo(
+      getServerDataKey(guildId, server.id)
+    );
+    if (cachedInfo) {
+      return createCachedResult(
+        cachedInfo,
+        server,
+        'Error occurred - showing cached data'
+      );
     }
 
     return {
